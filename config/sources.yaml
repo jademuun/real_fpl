@@ -1,0 +1,52 @@
+# Source configuration. Endpoints verified working 2026-09-11.
+# Keep endpoints here rather than as constants in code so a URL change is a
+# config edit, not a code change.
+
+user_agent: "real-fpl/0.1 (personal FPL analysis project)"
+
+# Season currently being played. FPL's own API only ever serves this one in
+# per-match detail; older seasons come from the historical backfill.
+current_season: "2026-27"
+
+fpl:
+  base_url: "https://fantasy.premierleague.com/api"
+  # FPL is unauthenticated and tolerant, but element-summary is ~656 calls per
+  # full refresh, so stay polite.
+  rate_limit_per_sec: 2.0
+  endpoints:
+    bootstrap: "/bootstrap-static/"
+    fixtures: "/fixtures/"
+    element_summary: "/element-summary/{element_id}/"
+    event_live: "/event/{gw}/live/"
+
+pl_official:
+  base_url: "https://footballapi.pulselive.com/football"
+  # Returns 403 without this Origin header. Not a workaround - it is the
+  # documented CORS behaviour of the public site API.
+  origin: "https://www.premierleague.com"
+  rate_limit_per_sec: 1.0
+  competition_id: 1
+  # Confirmed live via /football/competitions/1/compseasons
+  comp_seasons:
+    "2026-27": 841
+    "2025-26": 777
+    "2024-25": 719
+  endpoints:
+    compseasons: "/competitions/{competition_id}/compseasons"
+    fixtures: "/fixtures"
+    match_stats: "/stats/match/{fixture_id}"
+    ranked_players: "/stats/ranked/players/{stat}"
+
+historical:
+  # vaastav/Fantasy-Premier-League mirrors FPL's own per-gameweek data as CSVs
+  # going back to 2016-17. Used only to backfill seasons the live API no longer
+  # exposes in per-match detail.
+  base_url: "https://raw.githubusercontent.com/vaastav/Fantasy-Premier-League/master/data"
+  rate_limit_per_sec: 5.0
+  seasons:
+    - "2024-25"
+    - "2025-26"
+    - "2026-27"
+  files:
+    merged_gw: "/{season}/gws/merged_gw.csv"
+    players_raw: "/{season}/players_raw.csv"

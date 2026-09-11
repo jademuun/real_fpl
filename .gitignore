@@ -1,0 +1,18 @@
+# Everything under data/ is reproducible from the commands in README.md.
+# The raw archive in particular gets large fast (~170KB per bootstrap fetch,
+# and --all writes 656 more files per run).
+data/raw/
+data/exports/
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# uv.lock IS committed on purpose - it pins exact versions so the project
+# rebuilds identically later. Only applications commit lockfiles; libraries
+# don't, because they must stay flexible for whoever depends on them.

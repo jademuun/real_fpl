@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install *)",
+      "Bash(python3 -m venv /tmp/claude-1000/-home-arthas-repo-real-fpl/fe03576c-e883-4d70-8dd4-34310659536d/scratchpad/testvenv)"
+    ]
+  }
+}

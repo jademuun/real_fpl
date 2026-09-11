@@ -1,0 +1,32 @@
+[project]
+name = "real-fpl"
+version = "0.1.0"
+description = "Premier League / FPL data ingestion and player buy-sell analysis"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "requests>=2.32",
+    "pandas>=2.2",
+    "pyarrow>=17.0",
+    "typer>=0.12",
+    "pyyaml>=6.0",
+    "tenacity>=9.0",
+]
+
+[project.scripts]
+real-fpl = "real_fpl.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/real_fpl"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
