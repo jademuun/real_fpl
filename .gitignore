@@ -17,3 +17,5 @@ docs/LEARNING.md
 # uv.lock IS committed on purpose - it pins exact versions so the project
 # rebuilds identically later. Only applications commit lockfiles; libraries
 # don't, because they must stay flexible for whoever depends on them.
+docs/NEXT-SESSION.md
+real_fpl.code-workspace
