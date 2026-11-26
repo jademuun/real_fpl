@@ -159,8 +159,11 @@ def fpl_fetcher(conn=None) -> Fetcher:
 
 def pl_fetcher(conn=None) -> Fetcher:
     cfg = load_config()["pl_official"]
-    # The pulselive API returns 403 without an Origin header. This is its
-    # documented CORS behaviour for the public site, not an access control.
+    # Sent because a 403-without-Origin was observed once (2026-09-11, see
+    # CLAUDE.md). Re-tested live on 2026-09-12 and every configured endpoint
+    # returned 200 with no headers at all -- so treat that 403 as unconfirmed,
+    # not settled. Kept anyway: harmless if pulselive doesn't check it, and
+    # cheap insurance if the check comes back.
     f = Fetcher("pl_official", cfg["rate_limit_per_sec"], headers={"Origin": cfg["origin"]})
     f.conn = conn
     return f

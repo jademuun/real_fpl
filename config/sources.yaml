@@ -21,8 +21,9 @@ fpl:
 
 pl_official:
   base_url: "https://footballapi.pulselive.com/football"
-  # Returns 403 without this Origin header. Not a workaround - it is the
-  # documented CORS behaviour of the public site API.
+  # A 403-without-this-header was observed once (2026-09-11). Re-checked live
+  # on 2026-09-12: every endpoint below returned 200 with no headers at all,
+  # so don't treat the 403 as settled fact -- see http.py::pl_fetcher.
   origin: "https://www.premierleague.com"
   rate_limit_per_sec: 1.0
   competition_id: 1
