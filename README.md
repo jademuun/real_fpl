@@ -15,6 +15,25 @@ come next.
 
 At the time of writing it holds 674 players and about 7,200 player-match rows.
 
+```mermaid
+flowchart LR
+    T["systemd timers<br/>home server<br/>daily + weekly"] --> F
+    S1["FPL API"] --> F["Fetcher<br/>rate-limited, retries"]
+    F -- "1 archive" --> R[("Raw archive<br/>gzipped JSON")]
+    F -- "2 parse" --> P["Parsers<br/>pure functions"]
+    P --> D[("SQLite")]
+    D --- A["players, fixtures, player_gw<br/>upserted on natural keys"]
+    D --- B["player_snapshots<br/>append-only, trigger-enforced"]
+    D --> E["CSV / Parquet export"]
+    E -.-> M["Features and model<br/>planned"]
+    D -. "read-only copy" .-> L["Laptop analysis"]
+    classDef planned stroke-dasharray: 5 5
+    class M planned
+```
+
+The archive step comes before parsing on purpose: the raw response is saved first, so a parser
+bug is fixed by re-parsing, not re-fetching.
+
 ## Design decisions
 
 The three that matter, and why:
