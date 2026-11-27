@@ -166,6 +166,38 @@ CREATE TABLE IF NOT EXISTS season_players (
     PRIMARY KEY (season, opta_code)
 );
 
+-- One FPL manager's team ("entry"), per gameweek. Settled once the gameweek's
+-- deadline has passed (points and rank firm up when it finishes), so upserted.
+-- Contract with the UI: CLAUDE.md, "Contract: entry". No names stored, only the id.
+CREATE TABLE IF NOT EXISTS entry_gw (
+    season               TEXT    NOT NULL,
+    entry_id             INTEGER NOT NULL,
+    gameweek             INTEGER NOT NULL,
+    points               INTEGER,   -- gameweek points after transfer hits
+    total_points         INTEGER,
+    overall_rank         INTEGER,
+    bank                 INTEGER,   -- tenths of a million, as FPL serves it
+    value                INTEGER,   -- squad value, tenths of a million
+    event_transfers      INTEGER,
+    event_transfers_cost INTEGER,
+    points_on_bench      INTEGER,
+    active_chip          TEXT,      -- NULL, 'wildcard', 'bboost', '3xc', 'freehit', ...
+    PRIMARY KEY (season, entry_id, gameweek)
+);
+
+CREATE TABLE IF NOT EXISTS entry_picks (
+    season          TEXT    NOT NULL,
+    entry_id        INTEGER NOT NULL,
+    gameweek        INTEGER NOT NULL,
+    slot            INTEGER NOT NULL,  -- FPL's `position`: 1-11 starting XI, 12-15 bench in order
+    fpl_element_id  INTEGER NOT NULL,  -- as FPL served it; kept so an unmapped pick isn't lost
+    opta_code       TEXT,              -- NULL only if the element had no season_players row
+    multiplier      INTEGER NOT NULL,  -- 0 benched, 1, 2 captain, 3 triple captain
+    is_captain      INTEGER NOT NULL,
+    is_vice_captain INTEGER NOT NULL,
+    PRIMARY KEY (season, entry_id, gameweek, slot)
+);
+
 -- APPEND ONLY. Never UPDATE a row in this table; see module docstring.
 CREATE TABLE IF NOT EXISTS player_snapshots (
     snapshot_ts     TEXT    NOT NULL,
@@ -221,7 +253,8 @@ END;
 """
 
 # Tables whose contents are derived and can be rebuilt from data/raw/.
-FACT_TABLES = ("teams", "players", "season_players", "fixtures", "player_gw", "player_season")
+FACT_TABLES = ("teams", "players", "season_players", "fixtures", "player_gw", "player_season",
+               "entry_gw", "entry_picks")
 ALL_TABLES = FACT_TABLES + ("player_snapshots", "raw_fetches")
 
 

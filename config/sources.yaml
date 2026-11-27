@@ -18,6 +18,10 @@ fpl:
     fixtures: "/fixtures/"
     element_summary: "/element-summary/{element_id}/"
     event_live: "/event/{gw}/live/"
+    # One FPL manager's team ("entry"). Public, no login. Picks for a gameweek
+    # only become visible after that gameweek's deadline.
+    entry_history: "/entry/{entry_id}/history/"
+    entry_picks: "/entry/{entry_id}/event/{gw}/picks/"
 
 pl_official:
   base_url: "https://footballapi.pulselive.com/football"
