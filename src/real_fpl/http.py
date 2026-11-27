@@ -93,16 +93,19 @@ class Fetcher:
             raise RetryableStatus(f"{resp.status_code} for {url}")
         return resp
 
-    def get_json(
+    def get_bytes(
         self,
         url: str,
         params: dict[str, Any] | None = None,
         *,
         label: str,
+        ext: str,
         archive: bool = True,
-    ) -> Any:
-        """Fetch JSON, archiving the raw body first.
+    ) -> bytes:
+        """Fetch a body, archiving it first. Every typed getter goes through here.
 
+        One path for all formats is what keeps the raw-first rule true: a new
+        format (CSV today) can't grow its own fetch that forgets to archive.
         `label` names the subdirectory under data/raw/<source>/ and should
         identify the endpoint, not the specific resource, e.g. "element-summary".
         """
@@ -111,19 +114,44 @@ class Fetcher:
         body = resp.content
 
         if archive:
-            path = self._archive(label, body)
+            path = self._archive(label, body, ext)
             self._record(url, resp.status_code, body, path)
 
-        return json.loads(body)
+        return body
 
-    def _archive(self, label: str, body: bytes) -> Path:
+    def get_json(
+        self,
+        url: str,
+        params: dict[str, Any] | None = None,
+        *,
+        label: str,
+        archive: bool = True,
+    ) -> Any:
+        """Fetch JSON, archiving the raw body first."""
+        return json.loads(self.get_bytes(url, params, label=label, ext="json", archive=archive))
+
+    def get_text(
+        self,
+        url: str,
+        params: dict[str, Any] | None = None,
+        *,
+        label: str,
+        ext: str = "csv",
+        archive: bool = True,
+    ) -> str:
+        """Fetch text (e.g. CSV), archiving the raw body first."""
+        body = self.get_bytes(url, params, label=label, ext=ext, archive=archive)
+        # utf-8-sig drops a byte-order mark if a file has one; otherwise it is utf-8.
+        return body.decode("utf-8-sig")
+
+    def _archive(self, label: str, body: bytes, ext: str = "json") -> Path:
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         out_dir = self.raw_dir / label
         out_dir.mkdir(parents=True, exist_ok=True)
         # Include a content hash so repeat fetches within the same second do not
         # collide and identical payloads are obvious on disk.
         digest = hashlib.sha256(body).hexdigest()
-        path = out_dir / f"{ts}-{digest[:12]}.json.gz"
+        path = out_dir / f"{ts}-{digest[:12]}.{ext}.gz"
         with gzip.open(path, "wb") as fh:
             fh.write(body)
         return path
