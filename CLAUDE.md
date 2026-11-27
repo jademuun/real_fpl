@@ -110,6 +110,23 @@ money in practice.
 - Tests run against committed samples in `tests/fixtures/`, never the live API.
 - Coerce types at the boundary — FPL returns numerics as strings (`"12.4"`).
 
+## Machines, and where the data lives
+
+| Machine | Runs | Database |
+|---|---|---|
+| **Home server** (Debian) | `master` only; systemd timers run `fetch-fpl --snapshot` daily and `--all` weekly | `data/fpl.db` there is **the source of truth** |
+| **Laptop** (all worktrees) | development: the agents, tests, the UI while it's being built | `~/repo/real_fpl/data/fpl.db` is a **copy**, refreshed by `scripts/pull-db.sh` |
+
+- **Only the server fetches.** Never run `fetch-fpl` or `fetch-historical` on the laptop, from any
+  worktree. Two machines fetching would each record `player_snapshots` the other lacks: two
+  diverging histories of values that can never be re-fetched (invariant 3). Need fresher data?
+  Run `scripts/pull-db.sh` in `~/repo/real_fpl`.
+- The server's address isn't in the repo: each laptop sets `REAL_FPL_REMOTE_DB` itself.
+- **A pull replaces the whole database file**, including derived tables built on the laptop
+  (`target_rows`, `predictions`). After a pull, the model worktree rebuilds them
+  (`real-fpl build-features`, ~3 s). Once the model is merged to `master`, the plan is for the
+  server to build them after each fetch, so the pulled copy already contains them.
+
 ## Working with several agents
 
 Several Claude sessions work on this repo at once, each in its **own git worktree and branch**:
