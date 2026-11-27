@@ -1,0 +1,70 @@
+{% from "_macros.html" import team %}
+{#- The table on its own. players.html includes it for a full page; the route
+    returns it alone when htmx asks, so a filter change re-renders only this. #}
+{% macro th(col, label, cls="") -%}
+  <th class="{{ cls }}" {% if sort == col %}aria-sort="{{ 'descending' if desc else 'ascending' }}"{% endif %}>
+    <a href="{{ sort_url(col) }}">{{ label }}{% if sort == col %} {{ '▼' if desc else '▲' }}{% endif %}</a>
+  </th>
+{%- endmacro %}
+<div id="players-table">
+  <figure class="scatter">
+    <figcaption>
+      <strong>Points vs price</strong>
+      <span class="muted small">Up and to the left = more points per £. Hover for names, click to open.</span>
+    </figcaption>
+    <div class="scatter-canvas"><canvas id="value-chart"></canvas></div>
+  </figure>
+  {#- The chart's data rides along inside this fragment as JSON, so when htmx
+      swaps the table in after a filter change, the new data comes with it. #}
+  <script type="application/json" id="value-data">{{ scatter|tojson }}</script>
+  <p class="muted">{{ players|length }} players</p>
+  <div class="table-wrap">
+  <table class="data">
+    <thead>
+      <tr>
+        {{ th("name", "Player") }}
+        {{ th("team", "Team") }}
+        {{ th("pos", "Pos") }}
+        {{ th("price", "£m", "num") }}
+        {{ th("form", "Form", "num") }}
+        {{ th("selected", "Sel %", "num") }}
+        {{ th("points", "Pts", "num") }}
+        {% if pred %}{{ th("pred", "Pred GW%d" % pred.decision_gw, "num") }}{% endif %}
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in players %}
+      {% set label, tone = status(p.status) %}
+      <tr>
+        <td><a href="/player/{{ p.opta_code }}">{{ p.web_name }}</a></td>
+        <td>{% if p.team %}{{ team(p.team) }}{% endif %}</td>
+        <td>{{ p.position or "" }}</td>
+        <td class="num">{{ "%.1f"|format(p.price) if p.price is not none else "" }}</td>
+        <td class="num">{{ p.form if p.form is not none else "" }}</td>
+        <td class="num">{{ p.selected_by_percent if p.selected_by_percent is not none else "" }}</td>
+        <td class="num">{{ p.total_points if p.total_points is not none else "" }}</td>
+        {% if pred %}
+        {#- Rounded for display only; the stored value keeps full precision. #}
+        <td class="num">
+          {%- if p.pred_points is not none %}{{ "%.1f"|format(p.pred_points) }}
+            {%- if p.n_fixtures == 2 %} <span class="tag" title="Double gameweek">DGW</span>
+            {%- elif p.n_fixtures == 0 %} <span class="tag" title="Blank gameweek: no match">blank</span>{% endif %}
+          {%- endif -%}
+        </td>
+        {% endif %}
+        <td>
+          {% if p.status and p.status != "a" %}
+            <span class="badge {{ tone }}" title="{{ p.news or '' }}">
+              {{ label }}{% if p.chance_of_playing_next_round is not none %} {{ p.chance_of_playing_next_round }}%{% endif %}
+            </span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="{{ 9 if pred else 8 }}" class="muted">No players match these filters.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>

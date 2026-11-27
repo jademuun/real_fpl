@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Players{% endblock %}
+{% block head %}
+<script src="/static/chart.umd.min.js" defer></script>
+<script>
+  // Draw (or re-draw) the points-vs-price scatter from the JSON in the page.
+  // Runs on first load, and again after every htmx swap of the table, because
+  // the swap replaces the <canvas> and the data with new ones.
+  let valueChart;
+  const POS_COLOURS = { GKP: "#d97706", DEF: "#0d9488", MID: "#4f46e5", FWD: "#e11d48" };
+
+  function drawValueChart() {
+    const el = document.getElementById("value-data");
+    if (!el || !window.Chart) return;
+    const points = JSON.parse(el.textContent);
+    if (valueChart) valueChart.destroy();
+    // One dataset per position, so the legend doubles as a colour key.
+    const datasets = Object.entries(POS_COLOURS).map(([pos, colour]) => ({
+      label: pos,
+      data: points.filter(p => p.pos === pos),
+      backgroundColor: colour + "b3",  // ~70% opaque: overlapping dots stay visible
+      pointRadius: 4, pointHoverRadius: 7,
+    })).filter(d => d.data.length);
+    valueChart = new Chart(document.getElementById("value-chart"), {
+      type: "scatter",
+      data: { datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { title: { display: true, text: "Price (£m)" } },
+          y: { title: { display: true, text: "Total points" } },
+        },
+        plugins: {
+          tooltip: { callbacks: { label: c => `${c.raw.name} (${c.raw.team}) £${c.raw.x.toFixed(1)}m, ${c.raw.y} pts` } },
+        },
+        onClick: (_evt, items) => {
+          if (items.length) {
+            const p = items[0].element.$context.raw;
+            window.location.href = "/player/" + p.code;
+          }
+        },
+        onHover: (evt, items) => { evt.native.target.style.cursor = items.length ? "pointer" : "default"; },
+      },
+    });
+  }
+  document.addEventListener("DOMContentLoaded", drawValueChart);
+  document.addEventListener("htmx:afterSettle", drawValueChart);
+</script>
+{% endblock %}
+{% block content %}
+<h1>Players</h1>
+<p class="muted">
+  Latest snapshot: {{ snapshot_ts or "none yet" }} ·
+  {% if pred %}Predictions: <code>{{ pred.model_version }}</code>, made before GW{{ pred.decision_gw }} ({{ pred.created_at }})
+  {% else %}No predictions yet{% endif %}
+</p>
+
+{#- A plain HTML form: without JavaScript, pressing Filter reloads the page with
+    the choices in the URL (?pos=MID&q=salah). htmx upgrades it: on any change
+    it sends the same GET in the background, swaps in just the table
+    (hx-target), and updates the address bar (hx-push-url) so the URL stays
+    shareable and the Back button works. #}
+<form class="filters" action="/players" method="get"
+      hx-get="/players" hx-target="#players-table" hx-swap="outerHTML" hx-push-url="true"
+      hx-trigger="input changed delay:300ms from:input[type=search], change">
+  <input type="search" name="q" value="{{ filters.q }}" placeholder="Search name…" aria-label="Search name">
+  <select name="pos" aria-label="Position">
+    <option value="">All positions</option>
+    {% for p in positions %}
+      <option value="{{ p }}" {% if filters.pos == p %}selected{% endif %}>{{ p }}</option>
+    {% endfor %}
+  </select>
+  <select name="team" aria-label="Team">
+    <option value="">All teams</option>
+    {% for t in teams %}
+      <option value="{{ t.fpl_team_id }}" {% if filters.team == t.fpl_team_id %}selected{% endif %}>{{ t.name }}</option>
+    {% endfor %}
+  </select>
+  <label>Max £m
+    <input type="number" name="max_price" step="0.5" min="3.5" max="16"
+           value="{{ filters.max_price if filters.max_price is not none else '' }}">
+  </label>
+  {#- Carry the current sort along when filtering. #}
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <input type="hidden" name="dir" value="{{ 'desc' if desc else 'asc' }}">
+  <noscript><button type="submit">Filter</button></noscript>
+</form>
+
+{% include "_players_table.html" %}
+{% endblock %}

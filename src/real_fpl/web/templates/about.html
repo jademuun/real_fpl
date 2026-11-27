@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}About{% endblock %}
+{% block head %}
+{#- Mermaid draws the README's ```mermaid diagram. It is big (2.5 MB), so
+    only this page loads it. #}
+<script src="/static/mermaid.min.js" defer></script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "neutral" });
+    mermaid.run({ querySelector: "pre.mermaid" });
+  });
+</script>
+{% endblock %}
+{% block content %}
+<p class="muted small">This page is the project's <code>README.md</code>, rendered live: edit the file and reload.</p>
+<article class="prose">
+  {#- |safe: the HTML came from our own Markdown renderer (which escapes any raw
+      HTML in the file), so it is inserted as-is instead of being escaped again. #}
+  {{ readme_html|safe }}
+</article>
+{% endblock %}

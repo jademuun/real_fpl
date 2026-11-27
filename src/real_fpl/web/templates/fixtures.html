@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "_macros.html" import team %}
+{% block title %}Fixtures{% endblock %}
+{% block content %}
+<h1>Fixtures</h1>
+<p class="filters">
+  {% if from_gw > 1 %}<a href="/fixtures?start={{ from_gw - n_gw if from_gw - n_gw > 1 else 1 }}">← Earlier</a>{% endif %}
+  <span class="muted">GW {{ grid.gameweeks[0] }}–{{ grid.gameweeks[-1] }}{% if from_gw == next_gw %} (next {{ n_gw }}){% endif %}</span>
+  {% if from_gw != next_gw %}<a href="/fixtures">Next GW</a>{% endif %}
+  {% if grid.gameweeks[-1] < 38 %}<a href="/fixtures?start={{ from_gw + n_gw }}">Later →</a>{% endif %}
+</p>
+
+<div class="table-wrap">
+<table class="data fixtures">
+  <thead><tr>
+    <th>Team</th>
+    {% for gw in grid.gameweeks %}<th>GW {{ gw }}</th>{% endfor %}
+  </tr></thead>
+  <tbody>
+  {% for row in grid.rows %}
+    <tr>
+      <th scope="row">{{ team(row.short_name) }} {{ row.team }}</th>
+      {% for cell in row.cells %}
+        {#- A cell holds 0 fixtures (blank GW), 1, or 2 (double GW). #}
+        <td class="{{ 'blank' if not cell }}">
+          {% for f in cell %}
+            <span class="fdr fdr-{{ f.difficulty }}">{{ f.opponent }} ({{ f.venue }})</span>
+          {% endfor %}
+        </td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted small">
+  Colour = FPL's fixture difficulty (1 easiest, 5 hardest). It is FPL's rating as last fetched,
+  not the rating at the time of an older fixture.
+</p>
+{% endblock %}

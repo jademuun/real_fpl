@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% from "_macros.html" import team %}
+{% block title %}My team{% endblock %}
+
+{#- One player on the pitch: a big shirt, the name, and two numbers. #}
+{% macro card(p, bench=False) -%}
+{% set label, tone = status(p.status) %}
+{#- An unmapped pick (opta_code NULL, see the entry contract) has no player
+    page to link to, so it renders as a plain block instead of a link. #}
+{% set tag = "a" if p.opta_code else "span" %}
+<{{ tag }} class="pick {% if bench %}bench-pick{% endif %}" {% if p.opta_code %}href="/player/{{ p.opta_code }}"{% endif %}
+   title="{{ p.web_name }}{% if p.news %} — {{ p.news }}{% endif %}">
+  <span class="pick-shirt">
+    <svg class="kit-big" aria-hidden="true"><use href="#{{ kit_id(p.team) }}"/></svg>
+    {% if p.is_captain %}<span class="armband" title="Captain">{{ "TC" if p.multiplier == 3 else "C" }}</span>
+    {% elif p.is_vice_captain %}<span class="armband vice" title="Vice-captain">V</span>{% endif %}
+    {% if p.status and p.status != "a" %}<span class="pick-flag {{ tone }}" title="{{ label }}">!</span>{% endif %}
+  </span>
+  <span class="pick-name">{{ p.web_name }}</span>
+  <span class="pick-stats">
+    {#- Points as FPL scores them: the captain's count double. Bench points
+        don't count, so they're shown raw. #}
+    {#- No match rows yet (gameweek still being played) = a dash, not a 0. #}
+    <span title="Points in GW{{ squad.gameweek }}">{% if p.gw_points is none %}–{% else %}{{ p.gw_points * (p.multiplier if p.multiplier > 0 else 1) }}{% endif %} pts</span>
+    {%- if p.pred_next is not none %}<span class="pick-pred" title="Predicted next GW">{{ "%.1f"|format(p.pred_next) }}</span>{% endif %}
+  </span>
+</{{ tag }}>
+{%- endmacro %}
+
+{% block content %}
+<h1>My team</h1>
+
+{% if not squad %}
+<section class="panel empty-state">
+  <h2>No team yet</h2>
+  <p>This page shows your FPL squad on a pitch: who's captain, who's injured, last gameweek's
+  points and the model's predictions for each of your players.</p>
+  <p>Your team is fetched by the home server's daily run, which is being set up. The page
+  fills in as soon as the first fetch lands.</p>
+</section>
+{% else %}
+{% set s = squad.summary %}
+<section class="stats">
+  <div class="stat"><span class="stat-value">{{ s.points if s.points is not none else "—" }}</span><span class="stat-label">GW{{ squad.gameweek }} points{% if squad.live %} <span class="live">live</span>{% endif %}</span></div>
+  {% if squad.live and squad.previous %}
+  <div class="stat"><span class="stat-value">{{ squad.previous.points }}</span><span class="stat-label">GW{{ squad.previous.gameweek }} points</span></div>
+  {% endif %}
+  <div class="stat"><span class="stat-value">{{ "{:,}".format(s.total_points) if s.total_points is not none else "—" }}</span><span class="stat-label">total points</span></div>
+  <div class="stat"><span class="stat-value">{{ "{:,}".format(s.overall_rank) if s.overall_rank else "—" }}</span><span class="stat-label">overall rank</span></div>
+  <div class="stat"><span class="stat-value">{{ "£%.1fm"|format(s.value / 10) if s.value is not none else "—" }}</span><span class="stat-label">squad value</span></div>
+  <div class="stat"><span class="stat-value">{{ "£%.1fm"|format(s.bank / 10) if s.bank is not none else "—" }}</span><span class="stat-label">in the bank</span></div>
+  {% if squad.expected_next is not none %}
+  <div class="stat accent"><span class="stat-value">{{ "%.1f"|format(squad.expected_next) }}</span><span class="stat-label">expected GW{{ pred.decision_gw }} points</span></div>
+  {% endif %}
+</section>
+<p class="muted small">
+  {% if squad.live %}GW{{ squad.gameweek }} is still being played: points and rank fill in as matches finish (updated daily). {% endif %}
+  Squad as of the GW{{ squad.gameweek }} deadline{% if s.active_chip %} · chip played: <strong>{{ s.active_chip }}</strong>{% endif %}{% if s.event_transfers %} · {{ s.event_transfers }} transfer{{ "s" if s.event_transfers != 1 }}{% if s.event_transfers_cost %} (−{{ s.event_transfers_cost }} pts){% endif %}{% endif %}.
+  FPL only shows a team's picks after each deadline, so transfers you've made since then appear here after the next one.
+</p>
+
+{#- The pitch: one row per position, goalkeeper at the back (top), forwards at the front. #}
+<div class="pitch">
+  {% for line in squad.lines %}{% if line %}
+  <div class="pitch-line">{% for p in line %}{{ card(p) }}{% endfor %}</div>
+  {% endif %}{% endfor %}
+</div>
+<div class="bench">
+  <span class="bench-label">Bench</span>
+  {% for p in squad.bench %}{{ card(p, bench=True) }}{% endfor %}
+</div>
+
+<h2>Squad and predictions</h2>
+<div class="table-wrap">
+<table class="data">
+  <thead><tr>
+    <th>Player</th><th>Team</th><th>Pos</th><th class="num">£m</th>
+    <th class="num">GW{{ squad.gameweek }} pts</th>
+    <th class="num">Pred next GW</th><th class="num">Pred 3 GW</th><th>Status</th>
+  </tr></thead>
+  <tbody>
+  {% for p in squad.picks %}
+    {% set label, tone = status(p.status) %}
+    <tr {% if p.slot > 11 %}class="muted-row"{% endif %}>
+      <td>{% if p.opta_code %}<a href="/player/{{ p.opta_code }}">{{ p.web_name }}</a>{% else %}{{ p.web_name }} <span class="muted small" title="FPL element id; not yet matched to a player">(unmatched)</span>{% endif %}
+        {% if p.is_captain %}<span class="tag">C</span>{% elif p.is_vice_captain %}<span class="tag">V</span>{% endif %}
+        {% if p.slot > 11 %}<span class="muted small">bench</span>{% endif %}</td>
+      <td>{{ team(p.team) }}</td>
+      <td>{{ p.position or "" }}</td>
+      <td class="num">{{ "%.1f"|format(p.price) if p.price is not none else "" }}</td>
+      <td class="num">{{ p.gw_points if p.gw_points is not none else "–" }}</td>
+      <td class="num">{{ "%.1f"|format(p.pred_next) if p.pred_next is not none else "" }}</td>
+      <td class="num"><strong>{{ "%.1f"|format(p.pred_3gw) if p.pred_3gw is not none else "" }}</strong></td>
+      <td>{% if p.status and p.status != "a" %}<span class="badge {{ tone }}" title="{{ p.news or '' }}">{{ label }}{% if p.chance_of_playing_next_round is not none %} {{ p.chance_of_playing_next_round }}%{% endif %}</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if pred %}<p class="muted small">Predictions: <code>{{ pred.model_version }}</code>, made before GW{{ pred.decision_gw }}.</p>
+{% else %}<p class="muted small">No predictions yet.</p>{% endif %}
+{% endif %}
+{% endblock %}

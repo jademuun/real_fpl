@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Refreshing{% endblock %}
+{% block head %}
+{#- Reload by itself after a few seconds. The rebuild that caused this page is
+    usually over by then. #}
+<meta http-equiv="refresh" content="5">
+{% endblock %}
+{% block content %}
+<h1>Data is refreshing</h1>
+<p class="muted">The database is being rebuilt right now. This page will reload in a few seconds.</p>
+{% endblock %}

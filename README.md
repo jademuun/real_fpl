@@ -3,17 +3,20 @@
 A data pipeline for Fantasy Premier League. It collects player data from public APIs every day
 and stores it so a model can later suggest which players to buy and sell.
 
-Status: the ingestion pipeline is built and running daily. Feature engineering and the model
-come next.
+Status: ingestion is built and runs daily on a home server, with 2024-25 and 2025-26 backfilled.
+Feature engineering (Phase 2) is in progress; the model (Phase 3) comes next. A read-only web UI
+shows the data.
 
 ## What it does
 
-- Pulls player, fixture and per-match data (xG, xA, minutes, cards, bonus, price) from the FPL API.
+- Pulls player, fixture and per-match data (xG, xA, minutes, cards, bonus, price) from the FPL API,
+  and closed seasons from a mirror of FPL's own history.
 - Takes a **daily snapshot** of price, ownership and injury state. The API only shows these
   *as of now*, so a day that isn't captured can never be recovered.
 - Stores everything in SQLite and exports to CSV or Parquet for analysis.
 
-At the time of writing it holds 674 players and about 7,200 player-match rows.
+It holds three seasons of per-match history (2024-25 onwards, about 64,000 player-match rows)
+and around 670 players in the current season. The web UI's home page shows the live numbers.
 
 ```mermaid
 flowchart LR
@@ -25,8 +28,8 @@ flowchart LR
     D --- A["players, fixtures, player_gw<br/>upserted on natural keys"]
     D --- B["player_snapshots<br/>append-only, trigger-enforced"]
     D --> E["CSV / Parquet export"]
-    E -.-> M["Features and model<br/>planned"]
-    D -. "read-only copy" .-> L["Laptop analysis"]
+    E -.-> M["Features and model<br/>in progress"]
+    D -. "read-only copy" .-> L["Laptop: analysis<br/>and web UI"]
     classDef planned stroke-dasharray: 5 5
     class M planned
 ```
@@ -57,12 +60,14 @@ Requires [uv](https://docs.astral.sh/uv/).
 
 ```bash
 uv sync
+# Fetching is for the home server only (see below); on any other machine, pull a copy.
 uv run real-fpl init-db                    # create the schema
 uv run real-fpl fetch-fpl --snapshot       # one request: price + injury state now
 uv run real-fpl fetch-fpl --all            # + fixtures + every player's match history (~6 min)
 uv run real-fpl fetch-historical           # one-off: 2024-25, 2025-26 from the FPL mirror
 uv run real-fpl export                     # CSV / Parquet out
 uv run real-fpl status                     # row counts and last-fetch times
+uv run real-fpl serve                      # web UI at http://localhost:8000
 uv run pytest
 ```
 
@@ -101,6 +106,10 @@ Both are public JSON with no browser or HTML parsing needed:
 - **FPL API** (`fantasy.premierleague.com/api`): the backbone.
 - **Premier League API** (`footballapi.pulselive.com`): the official Opta feed. The source
   module is not built yet.
+- **vaastav/Fantasy-Premier-League** on GitHub, for closed seasons only: FPL's own data scraped
+  weekly into CSV, the only place per-match history survives once a season ends. Never used for
+  the current season, and its end-of-season team strengths are never used as features (they
+  would leak the future).
 
 FBref, Understat, FotMob and WhoScored were checked and deliberately left out (bot protection,
 client-rendered pages, or `robots.txt` disallowing it).
@@ -115,6 +124,7 @@ src/real_fpl/
   sources/              one module per upstream source
   transform/            raw JSON -> table rows (pure functions)
   export.py             CSV / Parquet and the enriched player-match view
+  web/                  the web UI: routes, SQL queries, HTML templates, CSS and JS
 scripts/pull-db.sh      copy the server's database to this machine (see above)
 tests/                  run against committed samples in tests/fixtures/
 data/                   database, raw archive, exports (gitignored, reproducible)
@@ -122,8 +132,37 @@ data/                   database, raw archive, exports (gitignored, reproducible
 
 ## Next
 
-- Features for a 3-gameweek points target (in progress): history for 2024-25 and 2025-26 is
-  backfilled (`real-fpl fetch-historical`); next is the target table and lagged features.
+- Features (in progress): the target is FPL points for each of a player's matches in the next
+  three gameweeks, predicted separately, with features as of just before the deadline.
 - Later: rest and rotation (needs European and cup fixtures), a date dimension.
 - A model: baselines, then a GLM, then gradient-boosted trees, tested on a season-based split.
-  Buy and sell suggestions come after that.
+  Buy and sell suggestions come after that. The web UI's Predictions page is ready for the
+  model's output and shows the newest model by default.
+
+## Web UI
+
+A small read-only website over the database:
+
+- **Home**: headline numbers (a quick check that the daily fetch is alive), players in form,
+  latest injury news.
+- **Players**: filterable, sortable table plus a points-vs-price scatter of the same rows.
+- **Player**: match-by-match history, points and price charts, any past season, with the club
+  he played for *then*.
+- **Predictions**: the model's expected points per player for the next three gameweeks, with a
+  switch between model versions. Says "no predictions yet" until the model has run.
+- **Fixtures**: difficulty grid for the next five gameweeks, double and blank gameweeks shown.
+- **About**: this README, rendered.
+
+Clubs are shown as small kit icons (`web/teams.py`), not crests: a single colour can't tell
+the many red clubs apart, and crests are the clubs' trademarks.
+
+```bash
+uv run real-fpl serve                 # http://localhost:8000
+uv run real-fpl serve --reload        # restart on code changes while developing
+REAL_FPL_DB=/path/to/fpl.db uv run real-fpl serve   # use a database somewhere else
+```
+
+It is FastAPI rendering Jinja2 HTML templates, with htmx for in-place filtering and Chart.js for
+the charts (both vendored in `src/real_fpl/web/static/`, so no Node and no CDN). The database is
+opened with SQLite's `mode=ro`, so the site cannot write to it. It listens on 127.0.0.1 only and
+has no login.

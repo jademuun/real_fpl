@@ -1,0 +1,8 @@
+{#- Small reusable pieces. A macro is a template function: write it once,
+    call it everywhere as {{ team("ARS") }}. -#}
+
+{#- A club: its shirt icon plus the three-letter code. The shirt drawing
+    itself lives once per page in the hidden sprite (teams.py, base.html). #}
+{% macro team(short) -%}
+<span class="team"><svg class="kit" aria-hidden="true"><use href="#{{ kit_id(short) }}"/></svg><span class="team-code">{{ short or "?" }}</span></span>
+{%- endmacro %}

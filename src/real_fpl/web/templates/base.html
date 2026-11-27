@@ -1,0 +1,38 @@
+{#- The layout every page shares. Other templates say {% extends "base.html" %}
+    and fill in the {% block %}s; everything else (nav, CSS, scripts) is written
+    once, here. -#}
+{%- set path = request.url.path -%}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  {#- Without this, phones render the page as a zoomed-out desktop page. #}
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Real FPL{% endblock %} · Real FPL</title>
+  {#- An inline SVG favicon: no image file to keep, and it scales to any size. #}
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
+  <link rel="stylesheet" href="/static/style.css">
+  {#- htmx and Chart.js are vendored into static/ rather than loaded from a CDN,
+      so the site works offline and never changes underneath us. #}
+  <script src="/static/htmx.min.js" defer></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  {{ kit_sprite }}
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark">R</span> Real FPL</a>
+    <nav>
+      {% for href, label in [("/team", "My team"), ("/players", "Players"), ("/predictions", "Predictions"), ("/fixtures", "Fixtures"), ("/about", "About")] %}
+        <a href="{{ href }}" {% if path == href or (href == "/players" and path.startswith("/player/")) %}aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <span class="season">{{ season }}</span>
+  </header>
+  <main class="{% block main_class %}{% endblock %}">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer muted small">
+    Data: the public FPL API, refreshed daily. Read-only view; nothing here changes the database.
+  </footer>
+</body>
+</html>
