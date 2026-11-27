@@ -61,7 +61,8 @@ uv run real-fpl init-db                    # create the schema
 uv run real-fpl fetch-fpl --snapshot       # one request: price + injury state now
 uv run real-fpl fetch-fpl --all            # + fixtures + every player's match history (~6 min)
 uv run real-fpl fetch-historical           # one-off: 2024-25, 2025-26 from the FPL mirror
-uv run real-fpl build-features             # rebuild the model's derived tables (~3 s)
+uv run real-fpl build-features             # rebuild the model's derived tables (~7 s)
+uv run real-fpl train                      # compare models, write live predictions (~35 s)
 uv run real-fpl export                     # CSV / Parquet out
 uv run real-fpl status                     # row counts and last-fetch times
 uv run pytest
@@ -114,6 +115,7 @@ src/real_fpl/
   sources/              one module per upstream source
   transform/            raw JSON -> table rows (pure functions)
   features/             derived tables for the model, rebuilt from the facts
+  model/                baselines, trees, evaluation, the predictions table
   export.py             CSV / Parquet and the enriched player-match view
 scripts/pull-db.sh      copy the server's database to this machine (see above)
 tests/                  run against committed samples in tests/fixtures/
@@ -127,5 +129,7 @@ data/                   database, raw archive, exports (gitignored, reproducible
   match per deadline) and the feature table (`model_rows`, 32 features measured as of each
   deadline, with a leakage test) are built. Next: baselines and the first model.
 - Later: rest and rotation (needs European and cup fixtures), a date dimension.
-- A model: baselines, then a GLM, then gradient-boosted trees, tested on a season-based split.
-  Buy and sell suggestions come after that.
+- Model v1 (`real-fpl train`): gradient-boosted trees beat both simple baselines and FPL's own
+  xP on a season-based split; live predictions go to the `predictions` table. Next: a two-part
+  model (will he play × points if he plays), a fix for under-predicted defenders, and
+  schedule-adjusted team ratings. Buy and sell suggestions come after that.

@@ -34,7 +34,8 @@ uv run real-fpl init-db
 uv run real-fpl fetch-fpl --snapshot     # 1 request; price + injury state now
 uv run real-fpl fetch-fpl --all          # + fixtures + 656 player histories (~6 min)
 uv run real-fpl fetch-historical         # one-off: closed seasons from the mirror
-uv run real-fpl build-features           # rebuild derived Phase 2 tables (~3 s)
+uv run real-fpl build-features           # rebuild derived Phase 2 tables (~7 s)
+uv run real-fpl train                    # evaluate, then write live predictions (~35 s)
 uv run real-fpl status
 uv run pytest
 ```
