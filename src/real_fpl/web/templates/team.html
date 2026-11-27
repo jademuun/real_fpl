@@ -5,7 +5,10 @@
 {#- One player on the pitch: a big shirt, the name, and two numbers. #}
 {% macro card(p, bench=False) -%}
 {% set label, tone = status(p.status) %}
-<a class="pick {% if bench %}bench-pick{% endif %}" href="/player/{{ p.opta_code }}"
+{#- An unmapped pick (opta_code NULL, see the entry contract) has no player
+    page to link to, so it renders as a plain block instead of a link. #}
+{% set tag = "a" if p.opta_code else "span" %}
+<{{ tag }} class="pick {% if bench %}bench-pick{% endif %}" {% if p.opta_code %}href="/player/{{ p.opta_code }}"{% endif %}
    title="{{ p.web_name }}{% if p.news %} — {{ p.news }}{% endif %}">
   <span class="pick-shirt">
     <svg class="kit-big" aria-hidden="true"><use href="#{{ kit_id(p.team) }}"/></svg>
@@ -20,7 +23,7 @@
     <span title="Points in GW{{ squad.gameweek }}">{{ (p.gw_points or 0) * (p.multiplier if p.multiplier > 0 else 1) }} pts</span>
     {%- if p.pred_next is not none %}<span class="pick-pred" title="Predicted next GW">{{ "%.1f"|format(p.pred_next) }}</span>{% endif %}
   </span>
-</a>
+</{{ tag }}>
 {%- endmacro %}
 
 {% block content %}
@@ -74,7 +77,7 @@
   {% for p in squad.picks %}
     {% set label, tone = status(p.status) %}
     <tr {% if p.slot > 11 %}class="muted-row"{% endif %}>
-      <td><a href="/player/{{ p.opta_code }}">{{ p.web_name }}</a>
+      <td>{% if p.opta_code %}<a href="/player/{{ p.opta_code }}">{{ p.web_name }}</a>{% else %}{{ p.web_name }} <span class="muted small" title="FPL element id; not yet matched to a player">(unmatched)</span>{% endif %}
         {% if p.is_captain %}<span class="tag">C</span>{% elif p.is_vice_captain %}<span class="tag">V</span>{% endif %}
         {% if p.slot > 11 %}<span class="muted small">bench</span>{% endif %}</td>
       <td>{{ team(p.team) }}</td>

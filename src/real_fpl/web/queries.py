@@ -489,7 +489,7 @@ def predictions_table(
     return {"gameweeks": gws, "rows": out}
 
 
-# --- my team (proposed contract: entry_picks + entry_gw) ----------------------
+# --- my team (CLAUDE.md, "Contract: entry") -----------------------------------
 
 def my_team(
     conn: sqlite3.Connection,

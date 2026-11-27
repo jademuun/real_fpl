@@ -334,13 +334,14 @@ def test_predictions_table_pivot(pred_db):
     c.close()
 
 
-# --- my team (proposed contract: entry_picks + entry_gw) ----------------------
+# --- my team (CLAUDE.md, "Contract: entry") -----------------------------------
 # Fake entry id 1: a real manager's id never goes into committed files.
 
 ENTRY_DDL = """
     CREATE TABLE entry_picks (
         season TEXT NOT NULL, entry_id INTEGER NOT NULL, gameweek INTEGER NOT NULL,
-        opta_code TEXT NOT NULL, fpl_element_id INTEGER NOT NULL, slot INTEGER NOT NULL,
+        slot INTEGER NOT NULL, fpl_element_id INTEGER NOT NULL,
+        opta_code TEXT,  -- NULL when the server couldn't map the element
         multiplier INTEGER NOT NULL, is_captain INTEGER NOT NULL, is_vice_captain INTEGER NOT NULL,
         PRIMARY KEY (season, entry_id, gameweek, slot));
     CREATE TABLE entry_gw (
@@ -355,13 +356,14 @@ def _add_team(path):
     c = sqlite3.connect(path)
     c.executescript(ENTRY_DDL)
     c.executemany(
-        "INSERT INTO entry_picks VALUES (?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO entry_picks (season, entry_id, gameweek, opta_code, fpl_element_id, slot,"
+        " multiplier, is_captain, is_vice_captain) VALUES (?,?,?,?,?,?,?,?,?)",
         [
             # An older gameweek's picks: must be ignored in favour of GW2.
             (SEASON, 1, 1, "p2", 22, 1, 2, 1, 0),
             (SEASON, 1, 2, "p3", 33, 1, 1, 0, 0),    # GKP
             (SEASON, 1, 2, "p1", 11, 2, 2, 1, 0),    # MID, captain
-            (SEASON, 1, 2, "p999", 999, 3, 1, 0, 0),  # element the server couldn't map
+            (SEASON, 1, 2, None, 999, 3, 1, 0, 0),   # element the server couldn't map
             (SEASON, 1, 2, "p2", 22, 12, 0, 0, 1),   # bench, vice-captain
         ],
     )
@@ -391,6 +393,7 @@ def test_my_team_latest_gameweek_and_captaincy(db_path):
         ["Raya"], ["Saka"], ["#999"]]
     saka = squad["picks"][1]
     assert saka["gw_points"] == 8  # double gameweek: 2 + 6
+    assert squad["picks"][2]["opta_code"] is None
     assert squad["expected_next"] is None  # no predictions table
     c.close()
 
@@ -405,3 +408,5 @@ def test_team_page_with_predictions(pred_db):
     assert "16 pts" in r.text
     # Expected next GW = Saka 4.26 x 2 (captain); Raya has no prediction.
     assert "8.5" in r.text
+    # The unmapped pick shows by element id, without a link to /player/None.
+    assert "#999" in r.text and "/player/None" not in r.text
