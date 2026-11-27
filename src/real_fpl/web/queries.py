@@ -487,3 +487,111 @@ def predictions_table(
         row["per_m"] = row["total"] / row["price"] if row["price"] else None
         out.append(row)
     return {"gameweeks": gws, "rows": out}
+
+
+# --- my team (proposed contract: entry_picks + entry_gw) ----------------------
+
+def my_team(
+    conn: sqlite3.Connection,
+    season: str,
+    pred: dict[str, Any] | None,
+    entry_id: int | None = None,
+) -> dict[str, Any] | None:
+    """A manager's latest squad: the 15 picks, each with price, status, points
+    and predictions, plus the gameweek summary (bank, value, rank...).
+
+    "Latest" is the newest gameweek with picks. FPL only reveals a team's picks
+    after that gameweek's deadline, so transfers made since then are invisible
+    here until the next deadline passes. The page says so.
+
+    Returns None until the server has fetched a team (tables absent or empty).
+    """
+    if not (_has_table(conn, "entry_picks") and _has_table(conn, "entry_gw")):
+        return None
+    where, params = "season = :season", {"season": season}
+    if entry_id is not None:
+        where += " AND entry_id = :entry"
+        params["entry"] = entry_id
+    latest = conn.execute(
+        f"SELECT entry_id, MAX(gameweek) AS gw FROM entry_picks WHERE {where} "
+        "GROUP BY entry_id ORDER BY gw DESC, entry_id LIMIT 1",
+        params,
+    ).fetchone()
+    if latest is None:
+        return None
+    entry_id, gw = latest["entry_id"], latest["gw"]
+
+    q = {"season": season, "entry": entry_id, "gw": gw,
+         "dgw": pred["decision_gw"] if pred else None,
+         "mv": pred["model_version"] if pred else None}
+    if pred:
+        pred_cols = """
+                   (SELECT pg.pred_points FROM predictions_gw pg
+                     WHERE pg.season = :season AND pg.opta_code = ep.opta_code
+                       AND pg.decision_gw = :dgw AND pg.model_version = :mv
+                       AND pg.gameweek = :dgw)                         AS pred_next,
+                   (SELECT SUM(pg.pred_points) FROM predictions_gw pg
+                     WHERE pg.season = :season AND pg.opta_code = ep.opta_code
+                       AND pg.decision_gw = :dgw AND pg.model_version = :mv) AS pred_3gw"""
+    else:
+        # predictions_gw may not exist (yet, or mid-rebuild); naming it in the
+        # SQL would fail the whole query, so leave it out entirely.
+        pred_cols = "NULL AS pred_next, NULL AS pred_3gw"
+    picks = _rows(
+        conn.execute(
+            f"""
+            SELECT ep.slot, ep.multiplier, ep.is_captain, ep.is_vice_captain,
+                   ep.opta_code, ep.fpl_element_id,
+                   -- LEFT JOIN + fallback: if the server couldn't map FPL's
+                   -- element id to an opta_code (a brand-new signing), the
+                   -- pick still shows instead of silently leaving a hole.
+                   COALESCE(p.web_name, '#' || ep.fpl_element_id) AS web_name,
+                   COALESCE(sp.position, p.position) AS position,
+                   t.short_name AS team,
+                   s.now_cost / 10.0 AS price, s.status, s.news,
+                   s.chance_of_playing_next_round,
+                   -- Points in that gameweek, summed over a double gameweek.
+                   (SELECT SUM(g.total_points) FROM player_gw g
+                     WHERE g.season = :season AND g.gameweek = :gw
+                       AND g.opta_code = ep.opta_code)                 AS gw_points,
+                   {pred_cols}
+            FROM entry_picks ep
+            LEFT JOIN players p ON p.opta_code = ep.opta_code
+            LEFT JOIN season_players sp ON sp.opta_code = ep.opta_code AND sp.season = :season
+            LEFT JOIN teams t ON t.season = :season
+                             AND t.fpl_team_id = COALESCE(sp.fpl_team_id, p.fpl_team_id)
+            LEFT JOIN player_snapshots s
+                   ON s.opta_code = ep.opta_code
+                  AND s.snapshot_ts = (SELECT MAX(snapshot_ts) FROM player_snapshots
+                                       WHERE season = :season)
+            WHERE ep.season = :season AND ep.entry_id = :entry AND ep.gameweek = :gw
+            ORDER BY ep.slot
+            """,
+            q,
+        )
+    )
+    summary = conn.execute(
+        "SELECT * FROM entry_gw WHERE season = ? AND entry_id = ? AND gameweek = ?",
+        (season, entry_id, gw),
+    ).fetchone()
+
+    xi = [p for p in picks if p["slot"] <= 11]
+    bench = [p for p in picks if p["slot"] > 11]
+    # The pitch draws the XI in rows by position, goalkeeper at the back.
+    lines = [[p for p in xi if p["position"] == pos] for pos in POSITIONS]
+    unplaced = [p for p in xi if p["position"] not in POSITIONS]
+    if unplaced:
+        lines.append(unplaced)
+
+    # Expected points next GW if this XI and captain stay as they are: the
+    # captain's prediction counts double (or triple), exactly as FPL scores it.
+    expected_next = None
+    if pred and any(p["pred_next"] is not None for p in xi):
+        expected_next = sum((p["pred_next"] or 0) * max(p["multiplier"], 1) for p in xi)
+
+    return {
+        "entry_id": entry_id, "gameweek": gw,
+        "summary": dict(summary) if summary else {},
+        "lines": lines, "bench": bench, "picks": picks,
+        "expected_next": expected_next,
+    }

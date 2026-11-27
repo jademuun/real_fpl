@@ -272,6 +272,21 @@ def create_app(db_path: Path | None = None, season: str | None = None) -> FastAP
             },
         )
 
+    @app.get("/team", response_class=HTMLResponse)
+    def team_page(
+        request: Request,
+        entry: str | None = None,
+        conn: sqlite3.Connection = Depends(get_conn),
+    ):
+        # The UI never needs the manager's FPL id: it shows whichever team the
+        # server fetched (newest gameweek). ?entry= only matters if several
+        # teams are ever stored.
+        pred = queries.live_predictions(conn, season)
+        squad = queries.my_team(conn, season, pred, _optional_int(entry))
+        return templates.TemplateResponse(
+            request, "team.html", {"season": season, "squad": squad, "pred": pred},
+        )
+
     @app.get("/predictions", response_class=HTMLResponse)
     def predictions_page(
         request: Request,

@@ -332,3 +332,76 @@ def test_predictions_table_pivot(pred_db):
     salah = next(r for r in t["rows"] if r["web_name"] == "Salah")
     assert salah["cells"][1] is None  # no row for GW5: shown as a dash
     c.close()
+
+
+# --- my team (proposed contract: entry_picks + entry_gw) ----------------------
+# Fake entry id 1: a real manager's id never goes into committed files.
+
+ENTRY_DDL = """
+    CREATE TABLE entry_picks (
+        season TEXT NOT NULL, entry_id INTEGER NOT NULL, gameweek INTEGER NOT NULL,
+        opta_code TEXT NOT NULL, fpl_element_id INTEGER NOT NULL, slot INTEGER NOT NULL,
+        multiplier INTEGER NOT NULL, is_captain INTEGER NOT NULL, is_vice_captain INTEGER NOT NULL,
+        PRIMARY KEY (season, entry_id, gameweek, slot));
+    CREATE TABLE entry_gw (
+        season TEXT NOT NULL, entry_id INTEGER NOT NULL, gameweek INTEGER NOT NULL,
+        points INTEGER, total_points INTEGER, overall_rank INTEGER, bank INTEGER, value INTEGER,
+        event_transfers INTEGER, event_transfers_cost INTEGER, points_on_bench INTEGER,
+        active_chip TEXT, PRIMARY KEY (season, entry_id, gameweek));
+"""
+
+
+def _add_team(path):
+    c = sqlite3.connect(path)
+    c.executescript(ENTRY_DDL)
+    c.executemany(
+        "INSERT INTO entry_picks VALUES (?,?,?,?,?,?,?,?,?)",
+        [
+            # An older gameweek's picks: must be ignored in favour of GW2.
+            (SEASON, 1, 1, "p2", 22, 1, 2, 1, 0),
+            (SEASON, 1, 2, "p3", 33, 1, 1, 0, 0),    # GKP
+            (SEASON, 1, 2, "p1", 11, 2, 2, 1, 0),    # MID, captain
+            (SEASON, 1, 2, "p999", 999, 3, 1, 0, 0),  # element the server couldn't map
+            (SEASON, 1, 2, "p2", 22, 12, 0, 0, 1),   # bench, vice-captain
+        ],
+    )
+    c.execute(
+        "INSERT INTO entry_gw VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        (SEASON, 1, 2, 30, 95, 123456, 15, 1002, 1, 4, 6, None),
+    )
+    c.commit()
+    c.close()
+
+
+def test_team_page_empty_state(client):
+    r = client.get("/team")
+    assert r.status_code == 200 and "No team yet" in r.text
+
+
+def test_my_team_latest_gameweek_and_captaincy(db_path):
+    _add_team(db_path)
+    c = sqlite3.connect(db_path)
+    c.row_factory = sqlite3.Row
+    squad = queries.my_team(c, SEASON, pred=None)
+    assert squad["gameweek"] == 2 and squad["entry_id"] == 1
+    assert [p["web_name"] for p in squad["picks"]] == ["Raya", "Saka", "#999", "Salah"]
+    assert [p["web_name"] for p in squad["bench"]] == ["Salah"]
+    # GKP line first, then MIDs; the unmapped pick still gets a place.
+    assert [[p["web_name"] for p in line] for line in squad["lines"] if line] == [
+        ["Raya"], ["Saka"], ["#999"]]
+    saka = squad["picks"][1]
+    assert saka["gw_points"] == 8  # double gameweek: 2 + 6
+    assert squad["expected_next"] is None  # no predictions table
+    c.close()
+
+
+def test_team_page_with_predictions(pred_db):
+    _add_team(pred_db)
+    client = TestClient(create_app(pred_db, season=SEASON))
+    r = client.get("/team")
+    assert r.status_code == 200
+    assert "£100.2m" in r.text and "£1.5m" in r.text and "123,456" in r.text
+    # Saka is captain: his 8 GW2 points show as 16 on the pitch.
+    assert "16 pts" in r.text
+    # Expected next GW = Saka 4.26 x 2 (captain); Raya has no prediction.
+    assert "8.5" in r.text
