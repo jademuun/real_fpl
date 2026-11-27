@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from real_fpl.transform import matches, players
-from real_fpl.transform.coerce import to_float, to_int
+from real_fpl.transform.coerce import to_bool_int, to_float, to_int
 from real_fpl.transform.seasons import normalise
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -110,3 +110,13 @@ def test_player_season_rows_normalise_the_season_label():
     rows = matches.player_season_rows(summary, "p154561")
     assert rows[0]["season"] == "2024-25"
     assert rows[0]["total_points"] == 142
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [("True", 1), ("False", 0), ("false", 0), ("1", 1), ("0", 0), (True, 1), (False, 0),
+     (None, None), ("maybe", None)],
+)
+def test_to_bool_int_parses_strings(raw, expected):
+    # bool("False") is True in Python; truth-testing would make every away game a home game.
+    assert to_bool_int(raw) == expected

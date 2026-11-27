@@ -28,9 +28,25 @@ def to_float(value: Any) -> float | None:
         return None
 
 
+_TRUE = {"true", "1", "t", "yes"}
+_FALSE = {"false", "0", "f", "no"}
+
+
 def to_bool_int(value: Any) -> int | None:
-    """SQLite has no bool; store 0/1."""
+    """SQLite has no bool; store 0/1.
+
+    Strings are parsed, not truth-tested: CSV sources (the historical mirror)
+    spell booleans "True"/"False", and bool("False") is True in Python -- plain
+    truthiness would silently mark every away match as a home match.
+    """
     if value is None:
+        return None
+    if isinstance(value, str):
+        s = value.strip().lower()
+        if s in _TRUE:
+            return 1
+        if s in _FALSE:
+            return 0
         return None
     return 1 if value else 0
 
