@@ -1,5 +1,52 @@
 {% extends "base.html" %}
 {% block title %}Players{% endblock %}
+{% block head %}
+<script src="/static/chart.umd.min.js" defer></script>
+<script>
+  // Draw (or re-draw) the points-vs-price scatter from the JSON in the page.
+  // Runs on first load, and again after every htmx swap of the table, because
+  // the swap replaces the <canvas> and the data with new ones.
+  let valueChart;
+  const POS_COLOURS = { GKP: "#d97706", DEF: "#0d9488", MID: "#4f46e5", FWD: "#e11d48" };
+
+  function drawValueChart() {
+    const el = document.getElementById("value-data");
+    if (!el || !window.Chart) return;
+    const points = JSON.parse(el.textContent);
+    if (valueChart) valueChart.destroy();
+    // One dataset per position, so the legend doubles as a colour key.
+    const datasets = Object.entries(POS_COLOURS).map(([pos, colour]) => ({
+      label: pos,
+      data: points.filter(p => p.pos === pos),
+      backgroundColor: colour + "b3",  // ~70% opaque: overlapping dots stay visible
+      pointRadius: 4, pointHoverRadius: 7,
+    })).filter(d => d.data.length);
+    valueChart = new Chart(document.getElementById("value-chart"), {
+      type: "scatter",
+      data: { datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { title: { display: true, text: "Price (£m)" } },
+          y: { title: { display: true, text: "Total points" } },
+        },
+        plugins: {
+          tooltip: { callbacks: { label: c => `${c.raw.name} (${c.raw.team}) £${c.raw.x.toFixed(1)}m, ${c.raw.y} pts` } },
+        },
+        onClick: (_evt, items) => {
+          if (items.length) {
+            const p = items[0].element.$context.raw;
+            window.location.href = "/player/" + p.code;
+          }
+        },
+        onHover: (evt, items) => { evt.native.target.style.cursor = items.length ? "pointer" : "default"; },
+      },
+    });
+  }
+  document.addEventListener("DOMContentLoaded", drawValueChart);
+  document.addEventListener("htmx:afterSettle", drawValueChart);
+</script>
+{% endblock %}
 {% block content %}
 <h1>Players</h1>
 <p class="muted">

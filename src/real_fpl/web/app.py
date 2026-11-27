@@ -218,7 +218,16 @@ def create_app(db_path: Path | None = None, season: str | None = None) -> FastAP
             params.update(sort=col, dir=new_dir)
             return "/players?" + urlencode(params)
 
+        # The scatter plots exactly the rows in the table, so filtering the
+        # table (say, to MIDs under £7m) re-draws the chart for that group too.
+        scatter = [
+            {"x": p["price"], "y": p["total_points"], "name": p["web_name"],
+             "team": p["team"], "pos": p["position"], "code": p["opta_code"]}
+            for p in players
+            if p["price"] is not None and p["total_points"] is not None
+        ]
         context = {
+            "scatter": scatter,
             "players": players, "filters": filters, "sort": sort, "desc": desc,
             "sort_url": sort_url, "positions": queries.POSITIONS,
             "teams": queries.teams(conn, season), "season": season,
@@ -261,6 +270,39 @@ def create_app(db_path: Path | None = None, season: str | None = None) -> FastAP
                     queries.player_predictions(conn, opta_code, season, pred) if pred else []
                 ),
             },
+        )
+
+    @app.get("/predictions", response_class=HTMLResponse)
+    def predictions_page(
+        request: Request,
+        model: str | None = None,
+        pos: str | None = None,
+        sort: str = "total",
+        conn: sqlite3.Connection = Depends(get_conn),
+    ):
+        models = queries.model_versions(conn, season)
+        pred = queries.live_predictions(conn, season, model)
+        table = None
+        if pred:
+            table = queries.predictions_table(
+                conn, season, pred, pos if pos in queries.POSITIONS else None
+            )
+            # Sorting in Python: the pivoted columns don't exist in SQL.
+            keys = {
+                "total": lambda r: r["total"],
+                "per_m": lambda r: r["per_m"] or 0,
+                "gw0": lambda r: (r["cells"][0] or {}).get("pred", 0),
+                "gw1": lambda r: (r["cells"][1] or {}).get("pred", 0),
+                "gw2": lambda r: (r["cells"][2] or {}).get("pred", 0),
+                "price": lambda r: r["price"] or 0,
+            }
+            sort = sort if sort in keys else "total"
+            table["rows"].sort(key=keys[sort], reverse=True)
+        return templates.TemplateResponse(
+            request, "predictions.html",
+            {"season": season, "pred": pred, "models": models, "table": table,
+             "pos": pos if pos in queries.POSITIONS else "", "sort": sort,
+             "positions": queries.POSITIONS},
         )
 
     @app.get("/fixtures", response_class=HTMLResponse)

@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% from "_macros.html" import team %}
+{% block title %}Predictions{% endblock %}
+{% block content %}
+<h1>Predictions</h1>
+
+{% if not pred %}
+{#- Until the model writes its first rows, say what will appear here and why,
+    rather than an empty table. #}
+<section class="panel empty-state">
+  <h2>No predictions yet</h2>
+  <p>The model is being built. When it runs, this page shows each player's <strong>expected FPL
+  points for each of his matches in the next three gameweeks</strong>, made just before the
+  upcoming deadline, using only what was known at that moment.</p>
+  <p>The table will look like this:</p>
+  <div class="table-wrap">
+  <table class="data preview">
+    <thead><tr><th>Player</th><th class="num">£m</th><th class="num">GW n</th><th class="num">GW n+1</th><th class="num">GW n+2</th><th class="num">3 GW total</th><th class="num">Pts per £m</th></tr></thead>
+    <tbody>
+      <tr><td>Player A <span class="muted small">MID</span></td><td class="num">7.5</td><td class="num">5.2</td><td class="num">9.8 <span class="tag">DGW</span></td><td class="num">4.1</td><td class="num"><strong>19.1</strong></td><td class="num">2.55</td></tr>
+      <tr><td>Player B <span class="muted small">DEF</span></td><td class="num">4.5</td><td class="num">3.9</td><td class="num">0.0 <span class="tag">blank</span></td><td class="num">4.4</td><td class="num"><strong>8.3</strong></td><td class="num">1.84</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="muted small">Example rows, not real numbers. Several models will be kept side by side
+  (first a simple last-4-matches baseline, then better ones), with a switch to compare them.</p>
+</section>
+
+{% else %}
+<form class="filters" method="get">
+  <label>Model
+    <select name="model" onchange="this.form.submit()">
+      {% for m in models %}
+        <option value="{{ m.model_version }}" {% if m.model_version == pred.model_version %}selected{% endif %}>
+          {{ m.model_version }}{% if loop.first %} (newest){% endif %}
+        </option>
+      {% endfor %}
+    </select>
+  </label>
+  <select name="pos" onchange="this.form.submit()" aria-label="Position">
+    <option value="">All positions</option>
+    {% for p in positions %}<option {% if pos == p %}selected{% endif %}>{{ p }}</option>{% endfor %}
+  </select>
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <noscript><button type="submit">Show</button></noscript>
+  <span class="muted small">Made before GW{{ pred.decision_gw }} · {{ pred.created_at }}</span>
+</form>
+
+{% macro th(key, label) -%}
+  <th class="num"><a href="/predictions?{{ {'model': pred.model_version, 'pos': pos, 'sort': key}|urlencode }}">{{ label }}{% if sort == key %} ▼{% endif %}</a></th>
+{%- endmacro %}
+<div class="table-wrap">
+<table class="data">
+  <thead><tr>
+    <th>Player</th><th>Team</th>{{ th("price", "£m") }}
+    {% for gw in table.gameweeks %}{{ th("gw%d" % loop.index0, "GW%d" % gw) }}{% endfor %}
+    {{ th("total", "3 GW total") }}{{ th("per_m", "Pts per £m") }}
+  </tr></thead>
+  <tbody>
+  {% for r in table.rows %}
+    <tr>
+      <td><a href="/player/{{ r.opta_code }}">{{ r.web_name }}</a> <span class="muted small">{{ r.position or "" }}</span></td>
+      <td>{{ team(r.team) }}</td>
+      <td class="num">{{ "%.1f"|format(r.price) if r.price is not none else "" }}</td>
+      {% for c in r.cells %}
+        <td class="num">
+          {%- if c %}{{ "%.1f"|format(c.pred) }}
+            {%- if c.n == 2 %} <span class="tag" title="Double gameweek">DGW</span>
+            {%- elif c.n == 0 %} <span class="tag" title="Blank gameweek">blank</span>{% endif %}
+          {%- else %}<span class="muted">–</span>{% endif -%}
+        </td>
+      {% endfor %}
+      <td class="num"><strong>{{ "%.1f"|format(r.total) }}</strong></td>
+      <td class="num">{{ "%.2f"|format(r.per_m) if r.per_m is not none else "" }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="muted">No predictions for this selection.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted small">Predicted points are rounded for display only. "Pts per £m" = 3 GW total ÷ current price.</p>
+{% endif %}
+{% endblock %}

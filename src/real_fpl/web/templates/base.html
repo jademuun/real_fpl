@@ -22,7 +22,7 @@
   <header class="topbar">
     <a class="brand" href="/"><span class="brand-mark">R</span> Real FPL</a>
     <nav>
-      {% for href, label in [("/players", "Players"), ("/fixtures", "Fixtures"), ("/about", "About")] %}
+      {% for href, label in [("/players", "Players"), ("/predictions", "Predictions"), ("/fixtures", "Fixtures"), ("/about", "About")] %}
         <a href="{{ href }}" {% if path == href or (href == "/players" and path.startswith("/player/")) %}aria-current="page"{% endif %}>{{ label }}</a>
       {% endfor %}
     </nav>

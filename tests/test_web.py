@@ -296,3 +296,39 @@ def test_every_kit_is_distinct():
     from real_fpl.web.teams import KITS
     looks = [(k.body, k.sleeves, k.stripes, k.trim) for k in KITS.values()]
     assert len(set(looks)) == len(looks)
+
+
+def test_players_fragment_carries_chart_data(client):
+    r = client.get("/players?pos=GKP", headers={"HX-Request": "true"})
+    assert 'id="value-data"' in r.text and '"name": "Raya"' in r.text
+    assert '"name": "Salah"' not in r.text  # filtered out of the chart too
+
+
+def test_predictions_page_empty_state(client):
+    r = client.get("/predictions")
+    assert r.status_code == 200 and "No predictions yet" in r.text
+
+
+def test_predictions_page_table(pred_db):
+    client = TestClient(create_app(pred_db, season=SEASON))
+    r = client.get("/predictions")
+    assert r.status_code == 200 and "trees_v1 (newest)" in r.text
+    # Saka: 4.26 + 10.04 + 0.0 = 14.3 over GW4-6, at £10.0m.
+    assert "14.3" in r.text and "1.43" in r.text and "blank" in r.text
+    # The older model is still selectable, and shows its own numbers.
+    old = client.get("/predictions?model=baseline_last4")
+    assert "9.9" in old.text
+
+
+def test_predictions_table_pivot(pred_db):
+    c = sqlite3.connect(pred_db)
+    c.row_factory = sqlite3.Row
+    live = queries.live_predictions(c, SEASON)
+    t = queries.predictions_table(c, SEASON, live)
+    saka = next(r for r in t["rows"] if r["web_name"] == "Saka")
+    assert t["gameweeks"] == [4, 5, 6]
+    assert [cell["n"] for cell in saka["cells"]] == [1, 2, 0]
+    assert saka["total"] == pytest.approx(14.30)  # full precision, not rounded
+    salah = next(r for r in t["rows"] if r["web_name"] == "Salah")
+    assert salah["cells"][1] is None  # no row for GW5: shown as a dash
+    c.close()

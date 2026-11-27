@@ -7,6 +7,16 @@
   </th>
 {%- endmacro %}
 <div id="players-table">
+  <figure class="scatter">
+    <figcaption>
+      <strong>Points vs price</strong>
+      <span class="muted small">Up and to the left = more points per £. Hover for names, click to open.</span>
+    </figcaption>
+    <div class="scatter-canvas"><canvas id="value-chart"></canvas></div>
+  </figure>
+  {#- The chart's data rides along inside this fragment as JSON, so when htmx
+      swaps the table in after a filter change, the new data comes with it. #}
+  <script type="application/json" id="value-data">{{ scatter|tojson }}</script>
   <p class="muted">{{ players|length }} players</p>
   <div class="table-wrap">
   <table class="data">

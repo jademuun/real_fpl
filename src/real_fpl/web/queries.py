@@ -306,7 +306,25 @@ def _has_table(conn: sqlite3.Connection, name: str) -> bool:
     return row is not None
 
 
-def live_predictions(conn: sqlite3.Connection, season: str) -> dict[str, Any] | None:
+def model_versions(conn: sqlite3.Connection, season: str) -> list[dict[str, Any]]:
+    """Every model that has predictions this season, newest first."""
+    if not _has_table(conn, "predictions"):
+        return []
+    return _rows(
+        conn.execute(
+            """
+            SELECT model_version, MAX(created_at) AS created_at, MAX(decision_gw) AS decision_gw
+            FROM predictions WHERE season = ?
+            GROUP BY model_version ORDER BY created_at DESC
+            """,
+            (season,),
+        )
+    )
+
+
+def live_predictions(
+    conn: sqlite3.Connection, season: str, model_version: str | None = None
+) -> dict[str, Any] | None:
     """Which predictions to show: the newest model, at its latest decision_gw.
 
     Several model_versions coexist on purpose (the baseline stays around to
@@ -316,6 +334,11 @@ def live_predictions(conn: sqlite3.Connection, season: str) -> dict[str, Any] | 
     """
     if not _has_table(conn, "predictions_gw") or not _has_table(conn, "predictions"):
         return None
+    if model_version:
+        # A specific model was asked for (the dropdown on /predictions).
+        chosen = [m for m in model_versions(conn, season) if m["model_version"] == model_version]
+        if chosen:
+            return dict(chosen[0])
     row = conn.execute(
         """
         SELECT model_version, MAX(created_at) AS created_at
@@ -405,3 +428,62 @@ def latest_news(conn: sqlite3.Connection, season: str, limit: int = 6) -> list[d
             {"season": season, "limit": limit},
         )
     )
+
+
+def predictions_table(
+    conn: sqlite3.Connection, season: str, pred: dict[str, Any], pos: str | None = None
+) -> dict[str, Any]:
+    """Players x the next three gameweeks, for one model at its live decision_gw.
+
+    The database holds one row per player per gameweek (predictions_gw); the
+    page wants one row per player with a column per gameweek. That reshaping
+    ("pivot") is done here in Python: simpler to read than the SQL version,
+    and ~700 players is nothing.
+
+    Totals are summed at full precision; only the template rounds, per the
+    contract.
+    """
+    dgw = pred["decision_gw"]
+    gws = [dgw, dgw + 1, dgw + 2]
+    params: dict[str, Any] = {"season": season, "dgw": dgw, "mv": pred["model_version"]}
+    pos_filter = ""
+    if pos in POSITIONS:
+        pos_filter = "AND COALESCE(sp.position, p.position) = :pos"
+        params["pos"] = pos
+    cur = conn.execute(
+        f"""
+        SELECT pg.opta_code, pg.gameweek, pg.pred_points, pg.n_fixtures,
+               p.web_name, COALESCE(sp.position, p.position) AS position,
+               t.short_name AS team, s.now_cost / 10.0 AS price
+        FROM predictions_gw pg
+        JOIN players p ON p.opta_code = pg.opta_code
+        LEFT JOIN season_players sp ON sp.opta_code = pg.opta_code AND sp.season = :season
+        LEFT JOIN teams t ON t.season = :season
+                         AND t.fpl_team_id = COALESCE(sp.fpl_team_id, p.fpl_team_id)
+        LEFT JOIN player_snapshots s
+               ON s.opta_code = pg.opta_code
+              AND s.snapshot_ts = (SELECT MAX(snapshot_ts) FROM player_snapshots
+                                   WHERE season = :season)
+        WHERE pg.season = :season AND pg.decision_gw = :dgw AND pg.model_version = :mv
+          {pos_filter}
+        """,
+        params,
+    )
+    players: dict[str, dict[str, Any]] = {}
+    for r in cur.fetchall():
+        row = players.setdefault(r["opta_code"], {
+            "opta_code": r["opta_code"], "web_name": r["web_name"], "position": r["position"],
+            "team": r["team"], "price": r["price"], "cells": {gw: None for gw in gws},
+        })
+        if r["gameweek"] in row["cells"]:
+            row["cells"][r["gameweek"]] = {"pred": r["pred_points"], "n": r["n_fixtures"]}
+
+    out = []
+    for row in players.values():
+        cells = [row["cells"][gw] for gw in gws]
+        row["cells"] = cells
+        row["total"] = sum(c["pred"] for c in cells if c)
+        # Points per £m over the three gameweeks: the number a transfer turns on.
+        row["per_m"] = row["total"] / row["price"] if row["price"] else None
+        out.append(row)
+    return {"gameweeks": gws, "rows": out}
