@@ -337,24 +337,12 @@ def test_predictions_table_pivot(pred_db):
 # --- my team (CLAUDE.md, "Contract: entry") -----------------------------------
 # Fake entry id 1: a real manager's id never goes into committed files.
 
-ENTRY_DDL = """
-    CREATE TABLE entry_picks (
-        season TEXT NOT NULL, entry_id INTEGER NOT NULL, gameweek INTEGER NOT NULL,
-        slot INTEGER NOT NULL, fpl_element_id INTEGER NOT NULL,
-        opta_code TEXT,  -- NULL when the server couldn't map the element
-        multiplier INTEGER NOT NULL, is_captain INTEGER NOT NULL, is_vice_captain INTEGER NOT NULL,
-        PRIMARY KEY (season, entry_id, gameweek, slot));
-    CREATE TABLE entry_gw (
-        season TEXT NOT NULL, entry_id INTEGER NOT NULL, gameweek INTEGER NOT NULL,
-        points INTEGER, total_points INTEGER, overall_rank INTEGER, bank INTEGER, value INTEGER,
-        event_transfers INTEGER, event_transfers_cost INTEGER, points_on_bench INTEGER,
-        active_chip TEXT, PRIMARY KEY (season, entry_id, gameweek));
-"""
 
 
 def _add_team(path):
+    # The entry tables come from db.init_db (the real schema, created by the
+    # db_path fixture), so the test can't drift from what the server writes.
     c = sqlite3.connect(path)
-    c.executescript(ENTRY_DDL)
     c.executemany(
         "INSERT INTO entry_picks (season, entry_id, gameweek, opta_code, fpl_element_id, slot,"
         " multiplier, is_captain, is_vice_captain) VALUES (?,?,?,?,?,?,?,?,?)",
