@@ -55,6 +55,10 @@ CREATE TABLE {TABLE} (
     opponent        INTEGER NOT NULL,
     was_home        INTEGER NOT NULL,
     kickoff_utc     TEXT,
+    -- The club's most recent finished match before the deadline. Every
+    -- feature is measured "up to and including this match" -- the precise
+    -- meaning of "as of the deadline".
+    asof_fixture_id INTEGER NOT NULL,
     -- Outcomes. Never features: they are what happened in the match itself.
     points          INTEGER,           -- the target; NULL = not played yet
     actual_minutes  INTEGER,           -- for a later "will he play?" model
@@ -135,7 +139,7 @@ STEPS: tuple[str, ...] = (
     # his club as of the deadline.
     """
     CREATE TEMP TABLE eligible AS
-    SELECT tl.season, tl.t, pm.opta_code, pm.team
+    SELECT tl.season, tl.t, pm.opta_code, pm.team, tl.fpl_fixture_id AS asof_fixture_id
     FROM team_latest tl
     JOIN player_matches pm
       ON pm.season = tl.season
@@ -148,6 +152,7 @@ STEPS: tuple[str, ...] = (
     INSERT INTO {TABLE}
     SELECT e.season, e.opta_code, e.t, tf.gameweek, tf.gameweek - e.t,
            tf.fpl_fixture_id, e.team, tf.opponent, tf.was_home, tf.kickoff_utc,
+           e.asof_fixture_id,
            CASE WHEN tf.finished = 1 THEN COALESCE(g.total_points, 0) END,
            CASE WHEN tf.finished = 1 THEN COALESCE(g.minutes, 0) END
     FROM eligible e
@@ -165,13 +170,20 @@ STEPS: tuple[str, ...] = (
 TEMP_TABLES = ("team_fixtures", "decisions", "team_latest", "player_matches", "eligible")
 
 
-def build_target(conn: sqlite3.Connection) -> int:
+def build_target(conn: sqlite3.Connection, keep_temp: bool = False) -> int:
+    """Rebuild target_rows. keep_temp leaves the helper tables (team_latest...)
+    in place for the feature build that runs straight after."""
     conn.executescript(SCHEMA)
     for t in TEMP_TABLES:
         conn.execute(f"DROP TABLE IF EXISTS temp.{t}")
     for step in STEPS:
         conn.execute(step)
     conn.commit()
-    for t in TEMP_TABLES:
-        conn.execute(f"DROP TABLE temp.{t}")
+    if not keep_temp:
+        drop_temp(conn)
     return conn.execute(f"SELECT COUNT(*) FROM {TABLE}").fetchone()[0]
+
+
+def drop_temp(conn: sqlite3.Connection) -> None:
+    for t in TEMP_TABLES:
+        conn.execute(f"DROP TABLE IF EXISTS temp.{t}")
