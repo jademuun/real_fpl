@@ -120,7 +120,7 @@ money in practice.
 
 | Machine | Runs | Database |
 |---|---|---|
-| **Home server** (Debian) | `master` only; systemd timers run `fetch-fpl --snapshot` daily and `--all` weekly | `data/fpl.db` there is **the source of truth** |
+| **Home server** (Debian) | `master` only; systemd timers run `fetch-fpl --snapshot` every 4 hours and `--all` weekly | `data/fpl.db` there is **the source of truth** |
 | **Laptop** (all worktrees) | development: the agents, tests, the UI while it's being built | `~/repo/real_fpl/data/fpl.db` is a **copy**, refreshed by `scripts/pull-db.sh` |
 
 - **Only the server fetches.** Never run `fetch-fpl` or `fetch-historical` on the laptop, from any

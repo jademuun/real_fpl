@@ -75,7 +75,7 @@ CLI:
 
 | Timer | Command | When |
 |---|---|---|
-| `real-fpl-snapshot` | `fetch-fpl --snapshot` | daily, 08:00 |
+| `real-fpl-snapshot` | `fetch-fpl --snapshot` | every 4 h: 02, 06, 10, 14, 18, 22:00 (server time) |
 | `real-fpl-full` | `fetch-fpl --all` | Mondays, 08:30 |
 
 - Snapshots are the time-sensitive part (see above); the weekly full fetch only refreshes
