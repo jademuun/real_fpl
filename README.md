@@ -61,6 +61,7 @@ uv run real-fpl init-db                    # create the schema
 uv run real-fpl fetch-fpl --snapshot       # one request: price + injury state now
 uv run real-fpl fetch-fpl --all            # + fixtures + every player's match history (~6 min)
 uv run real-fpl fetch-historical           # one-off: 2024-25, 2025-26 from the FPL mirror
+uv run real-fpl build-features             # rebuild the model's derived tables (~3 s)
 uv run real-fpl export                     # CSV / Parquet out
 uv run real-fpl status                     # row counts and last-fetch times
 uv run pytest
@@ -112,6 +113,7 @@ src/real_fpl/
   db.py                 schema and upsert/append helpers
   sources/              one module per upstream source
   transform/            raw JSON -> table rows (pure functions)
+  features/             derived tables for the model, rebuilt from the facts
   export.py             CSV / Parquet and the enriched player-match view
 scripts/pull-db.sh      copy the server's database to this machine (see above)
 tests/                  run against committed samples in tests/fixtures/
@@ -120,8 +122,9 @@ data/                   database, raw archive, exports (gitignored, reproducible
 
 ## Next
 
-- Features for a 3-gameweek points target (in progress): history for 2024-25 and 2025-26 is
-  backfilled (`real-fpl fetch-historical`); next is the target table and lagged features.
+- Features for predicting each match in the next 3 gameweeks (in progress): history for 2024-25
+  and 2025-26 is backfilled, and the target table (`target_rows`, one row per player per upcoming
+  match per deadline) is built. Next: lagged player and team features.
 - Later: rest and rotation (needs European and cup fixtures), a date dimension.
 - A model: baselines, then a GLM, then gradient-boosted trees, tested on a season-based split.
   Buy and sell suggestions come after that.
