@@ -60,6 +60,7 @@ uv sync
 uv run real-fpl init-db                    # create the schema
 uv run real-fpl fetch-fpl --snapshot       # one request: price + injury state now
 uv run real-fpl fetch-fpl --all            # + fixtures + every player's match history (~6 min)
+uv run real-fpl fetch-historical           # one-off: 2024-25, 2025-26 from the FPL mirror
 uv run real-fpl export                     # CSV / Parquet out
 uv run real-fpl status                     # row counts and last-fetch times
 uv run pytest
@@ -119,6 +120,8 @@ data/                   database, raw archive, exports (gitignored, reproducible
 
 ## Next
 
-- Features: rest and rotation (needs European and cup fixtures), position-aware defensive
-  contribution, a date dimension.
-- A model for buy and sell suggestions, validated on point-in-time data only.
+- Features for a 3-gameweek points target (in progress): history for 2024-25 and 2025-26 is
+  backfilled (`real-fpl fetch-historical`); next is the target table and lagged features.
+- Later: rest and rotation (needs European and cup fixtures), a date dimension.
+- A model: baselines, then a GLM, then gradient-boosted trees, tested on a season-based split.
+  Buy and sell suggestions come after that.
