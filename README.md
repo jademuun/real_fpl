@@ -80,8 +80,16 @@ CLI:
 - Timers use `Persistent=true`, so a run missed while the machine was off happens on next boot.
   A catch-up run records the state at that moment; it cannot recover the missed day.
 - Single ingester by design: a second machine fetching would fork `player_snapshots`. Other
-  machines pull a read-only copy made with `sqlite3 .backup`, which is safe while a fetch is
-  writing (the database uses WAL mode).
+  machines pull a read-only copy instead of fetching:
+
+  ```bash
+  export REAL_FPL_REMOTE_DB="user@server:repo/real_fpl/data/fpl.db"   # once, e.g. in ~/.bashrc
+  scripts/pull-db.sh
+  ```
+
+  It uses `sqlite3_rsync` (SQLite >= 3.47, needed on both machines), which is safe while a
+  fetch is writing and only transfers changed pages. Plain `scp` of `fpl.db` is not safe: the
+  database uses WAL mode, so recent writes may still be in `fpl.db-wal`.
 
 ## Data sources
 
@@ -104,6 +112,7 @@ src/real_fpl/
   sources/              one module per upstream source
   transform/            raw JSON -> table rows (pure functions)
   export.py             CSV / Parquet and the enriched player-match view
+scripts/pull-db.sh      copy the server's database to this machine (see above)
 tests/                  run against committed samples in tests/fixtures/
 data/                   database, raw archive, exports (gitignored, reproducible)
 ```
