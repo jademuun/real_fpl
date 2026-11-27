@@ -76,6 +76,8 @@ CLI:
 | `real-fpl-snapshot` | `fetch-fpl --snapshot` | daily, 08:00 |
 | `real-fpl-full` | `fetch-fpl --all` | Mondays, 08:30 |
 
+- With `REAL_FPL_ENTRY_ID` set (server only), the snapshot run also fetches that FPL team's
+  gameweek history and any new gameweek's picks, about 2 requests a day.
 - Snapshots are the time-sensitive part (see above); the weekly full fetch only refreshes
   history that can always be re-downloaded.
 - Timers use `Persistent=true`, so a run missed while the machine was off happens on next boot.

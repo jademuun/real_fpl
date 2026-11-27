@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+import os
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,20 @@ DATA_DIR = PROJECT_ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
 EXPORT_DIR = DATA_DIR / "exports"
 DB_PATH = DATA_DIR / "fpl.db"
+
+
+def entry_id() -> int | None:
+    """The FPL team to track, from REAL_FPL_ENTRY_ID; None when unset.
+
+    Read from the environment, never from committed config: it identifies a
+    real person's team, and only the server that fetches needs it.
+    """
+    raw = os.environ.get("REAL_FPL_ENTRY_ID", "").strip()
+    if not raw:
+        return None
+    if not raw.isdigit():
+        raise ValueError(f"REAL_FPL_ENTRY_ID must be a number, got {raw!r}")
+    return int(raw)
 
 
 @functools.lru_cache(maxsize=1)

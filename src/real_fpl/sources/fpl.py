@@ -22,7 +22,7 @@ from typing import Any, Callable
 from ..config import load_config
 from ..db import append, upsert
 from ..http import fpl_fetcher
-from ..transform import matches, players
+from ..transform import entry, matches, players
 
 log = logging.getLogger(__name__)
 
@@ -130,3 +130,39 @@ def ingest_player_histories(
         "player_season_rows": total_season,
         "failures": failures,
     }
+
+
+def ingest_entry(conn: sqlite3.Connection, entry_id: int) -> dict:
+    """One manager's team: gameweek history, plus picks for each gameweek not
+    yet stored. 1 request + 1 per new gameweek (about 2 a day once caught up).
+
+    Picks are only public once a gameweek's deadline has passed, and don't
+    change after it, so a stored gameweek isn't fetched again -- except the
+    latest one, re-fetched each run as a cheap guard against a partial store.
+    Runs after ingest_snapshot, so season_players already maps this season's
+    element ids to opta_code.
+    """
+    season = load_config()["current_season"]
+    fetcher = fpl_fetcher(conn)
+    history = fetcher.get_json(_url("entry_history", entry_id=entry_id), label="entry-history")
+    gw_rows = entry.entry_gw_rows(history, season, entry_id)
+    upsert(conn, "entry_gw", gw_rows, key=("season", "entry_id", "gameweek"))
+
+    have = {r[0] for r in conn.execute(
+        "SELECT DISTINCT gameweek FROM entry_picks WHERE season=? AND entry_id=?",
+        (season, entry_id))}
+    gws = sorted(r["gameweek"] for r in gw_rows)
+    todo = [gw for gw in gws if gw not in have] + ([gws[-1]] if gws and gws[-1] in have else [])
+
+    mapping = {r[0]: r[1] for r in conn.execute(
+        "SELECT fpl_element_id, opta_code FROM season_players WHERE season=?", (season,))}
+    n_picks = unmapped = 0
+    for gw in todo:
+        picks = fetcher.get_json(_url("entry_picks", entry_id=entry_id, gw=gw), label="entry-picks")
+        rows = entry.entry_picks_rows(picks, season, entry_id, gw, mapping)
+        unmapped += sum(r["opta_code"] is None for r in rows)
+        n_picks += upsert(conn, "entry_picks", rows, key=("season", "entry_id", "gameweek", "slot"))
+    if unmapped:
+        log.warning("entry %s: %d picks had no opta_code mapping (stored with NULL)", entry_id, unmapped)
+    return {"gameweeks": len(gw_rows), "picks_fetched_for": todo, "picks": n_picks,
+            "unmapped": unmapped}

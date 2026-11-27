@@ -45,6 +45,20 @@ def fetch_fpl(
         f"{result['players']} players, {result['snapshots']} snapshot rows"
     )
 
+    # The tracked team, when this machine has REAL_FPL_ENTRY_ID set (the server
+    # does; laptops don't). Its own failure must not cost the snapshot, which is
+    # already stored and is the part that can never be re-fetched.
+    from .config import entry_id
+
+    eid = entry_id()
+    if eid is not None:
+        try:
+            r = fpl_source.ingest_entry(conn, eid)
+            console.print(f"[green]entry[/green] {r['gameweeks']} gameweeks, picks for "
+                          f"{r['picks_fetched_for'] or 'nothing new'}")
+        except Exception as exc:  # noqa: BLE001
+            console.print(f"[yellow]entry fetch failed:[/yellow] {exc}")
+
     if all_:
         n = fpl_source.ingest_fixtures(conn)
         console.print(f"[green]fixtures[/green] {n} rows")
