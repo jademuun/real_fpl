@@ -109,6 +109,10 @@ CREATE TABLE IF NOT EXISTS player_gw (
     value           INTEGER,   -- price in tenths of a million AT that gameweek
     selected        INTEGER,
     transfers_balance INTEGER,
+    -- FPL's own expected points for this gameweek. Only the historical mirror
+    -- carries it (the live element-summary does not), so it is NULL for the
+    -- current season. Kept as the baseline any model has to beat.
+    xp              REAL,
     PRIMARY KEY (season, gameweek, opta_code, fpl_fixture_id)
 );
 CREATE INDEX IF NOT EXISTS idx_player_gw_player ON player_gw (opta_code, season, gameweek);
@@ -145,6 +149,20 @@ CREATE TABLE IF NOT EXISTS player_season (
     bonus           INTEGER,
     start_cost      INTEGER,
     end_cost        INTEGER,
+    PRIMARY KEY (season, opta_code)
+);
+
+-- Who a player was *in a given season*: position and club as they were then.
+-- `players` holds only the current state (it is upserted), so it can't answer
+-- "what position was he in 2024-25?" -- and players do get reclassified (MID to
+-- FWD) and transferred between seasons. fpl_element_id is stored per season
+-- because FPL reassigns it each summer; it is a lookup, never a join key.
+CREATE TABLE IF NOT EXISTS season_players (
+    season          TEXT    NOT NULL,
+    opta_code       TEXT    NOT NULL,
+    fpl_element_id  INTEGER,
+    position        TEXT,
+    fpl_team_id     INTEGER,
     PRIMARY KEY (season, opta_code)
 );
 
@@ -203,7 +221,7 @@ END;
 """
 
 # Tables whose contents are derived and can be rebuilt from data/raw/.
-FACT_TABLES = ("teams", "players", "fixtures", "player_gw", "player_season")
+FACT_TABLES = ("teams", "players", "season_players", "fixtures", "player_gw", "player_season")
 ALL_TABLES = FACT_TABLES + ("player_snapshots", "raw_fetches")
 
 
@@ -217,8 +235,25 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     return conn
 
 
+# Columns added after a table was first created. CREATE TABLE IF NOT EXISTS
+# never alters an existing table, so a database made before the column existed
+# (the laptop's, harrison's) would silently lack it. Each entry is applied once,
+# only where missing. Append-only list: never edit or reorder past entries.
+MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+    ("player_gw", "xp", "REAL"),
+)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    for table, column, decl in MIGRATIONS:
+        existing = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+
+
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    _migrate(conn)
     conn.commit()
 
 
@@ -266,6 +301,31 @@ def append(conn: sqlite3.Connection, table: str, rows: Sequence[dict[str, Any]])
     conn.executemany(sql, [tuple(r[c] for c in cols) for r in rows])
     conn.commit()
     return len(rows)
+
+
+def insert_missing(
+    conn: sqlite3.Connection,
+    table: str,
+    rows: Sequence[dict[str, Any]],
+) -> int:
+    """Insert rows whose key is absent; leave existing rows untouched.
+
+    For adding *old* records to a current-state table: the historical backfill
+    must add players who have since left the league to `players`, but must not
+    overwrite current players with their stale past-season details. Returns the
+    number of rows actually inserted.
+    """
+    if not rows:
+        return 0
+    cols = list(rows[0].keys())
+    placeholders = ", ".join("?" for _ in cols)
+    before = conn.total_changes
+    conn.executemany(
+        f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({placeholders}) ON CONFLICT DO NOTHING",
+        [tuple(r[c] for c in cols) for r in rows],
+    )
+    conn.commit()
+    return conn.total_changes - before
 
 
 def table_counts(conn: sqlite3.Connection, tables: Iterable[str] = ALL_TABLES) -> dict[str, int]:

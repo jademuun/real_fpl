@@ -70,3 +70,14 @@ def test_snapshots_reject_delete(conn):
 def test_empty_writes_are_safe(conn):
     assert db.upsert(conn, "players", [], key=("opta_code",)) == 0
     assert db.append(conn, "player_snapshots", []) == 0
+
+
+def test_migration_adds_xp_to_an_old_database(tmp_path):
+    """A database created before `xp` existed must gain the column on init_db."""
+    conn = db.connect(tmp_path / "old.db")
+    conn.execute("CREATE TABLE player_gw (season TEXT, gameweek INTEGER, opta_code TEXT, "
+                 "fpl_fixture_id INTEGER, PRIMARY KEY (season, gameweek, opta_code, fpl_fixture_id))")
+    db.init_db(conn)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(player_gw)")}
+    assert "xp" in cols
+    db.init_db(conn)  # and running it again is harmless
