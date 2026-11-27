@@ -20,7 +20,8 @@
   <span class="pick-stats">
     {#- Points as FPL scores them: the captain's count double. Bench points
         don't count, so they're shown raw. #}
-    <span title="Points in GW{{ squad.gameweek }}">{{ (p.gw_points or 0) * (p.multiplier if p.multiplier > 0 else 1) }} pts</span>
+    {#- No match rows yet (gameweek still being played) = a dash, not a 0. #}
+    <span title="Points in GW{{ squad.gameweek }}">{% if p.gw_points is none %}–{% else %}{{ p.gw_points * (p.multiplier if p.multiplier > 0 else 1) }}{% endif %} pts</span>
     {%- if p.pred_next is not none %}<span class="pick-pred" title="Predicted next GW">{{ "%.1f"|format(p.pred_next) }}</span>{% endif %}
   </span>
 </{{ tag }}>
@@ -40,7 +41,10 @@
 {% else %}
 {% set s = squad.summary %}
 <section class="stats">
-  <div class="stat"><span class="stat-value">{{ s.points if s.points is not none else "—" }}</span><span class="stat-label">GW{{ squad.gameweek }} points</span></div>
+  <div class="stat"><span class="stat-value">{{ s.points if s.points is not none else "—" }}</span><span class="stat-label">GW{{ squad.gameweek }} points{% if squad.live %} <span class="live">live</span>{% endif %}</span></div>
+  {% if squad.live and squad.previous %}
+  <div class="stat"><span class="stat-value">{{ squad.previous.points }}</span><span class="stat-label">GW{{ squad.previous.gameweek }} points</span></div>
+  {% endif %}
   <div class="stat"><span class="stat-value">{{ "{:,}".format(s.total_points) if s.total_points is not none else "—" }}</span><span class="stat-label">total points</span></div>
   <div class="stat"><span class="stat-value">{{ "{:,}".format(s.overall_rank) if s.overall_rank else "—" }}</span><span class="stat-label">overall rank</span></div>
   <div class="stat"><span class="stat-value">{{ "£%.1fm"|format(s.value / 10) if s.value is not none else "—" }}</span><span class="stat-label">squad value</span></div>
@@ -50,6 +54,7 @@
   {% endif %}
 </section>
 <p class="muted small">
+  {% if squad.live %}GW{{ squad.gameweek }} is still being played: points and rank fill in as matches finish (updated daily). {% endif %}
   Squad as of the GW{{ squad.gameweek }} deadline{% if s.active_chip %} · chip played: <strong>{{ s.active_chip }}</strong>{% endif %}{% if s.event_transfers %} · {{ s.event_transfers }} transfer{{ "s" if s.event_transfers != 1 }}{% if s.event_transfers_cost %} (−{{ s.event_transfers_cost }} pts){% endif %}{% endif %}.
   FPL only shows a team's picks after each deadline, so transfers you've made since then appear here after the next one.
 </p>
@@ -83,7 +88,7 @@
       <td>{{ team(p.team) }}</td>
       <td>{{ p.position or "" }}</td>
       <td class="num">{{ "%.1f"|format(p.price) if p.price is not none else "" }}</td>
-      <td class="num">{{ p.gw_points if p.gw_points is not none else "" }}</td>
+      <td class="num">{{ p.gw_points if p.gw_points is not none else "–" }}</td>
       <td class="num">{{ "%.1f"|format(p.pred_next) if p.pred_next is not none else "" }}</td>
       <td class="num"><strong>{{ "%.1f"|format(p.pred_3gw) if p.pred_3gw is not none else "" }}</strong></td>
       <td>{% if p.status and p.status != "a" %}<span class="badge {{ tone }}" title="{{ p.news or '' }}">{{ label }}{% if p.chance_of_playing_next_round is not none %} {{ p.chance_of_playing_next_round }}%{% endif %}</span>{% endif %}</td>

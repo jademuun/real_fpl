@@ -575,6 +575,19 @@ def my_team(
         (season, entry_id, gw),
     ).fetchone()
 
+    # Is that gameweek still being played? Picks appear right after the
+    # deadline, long before the matches finish, so the newest gameweek is often
+    # "live": its points are partial (or 0) and must not read as final.
+    live = conn.execute(
+        "SELECT EXISTS (SELECT 1 FROM fixtures WHERE season = ? AND gameweek = ? AND finished = 0)",
+        (season, gw),
+    ).fetchone()[0] == 1
+    previous = conn.execute(
+        "SELECT gameweek, points FROM entry_gw WHERE season = ? AND entry_id = ? AND gameweek < ? "
+        "ORDER BY gameweek DESC LIMIT 1",
+        (season, entry_id, gw),
+    ).fetchone()
+
     xi = [p for p in picks if p["slot"] <= 11]
     bench = [p for p in picks if p["slot"] > 11]
     # The pitch draws the XI in rows by position, goalkeeper at the back.
@@ -590,7 +603,8 @@ def my_team(
         expected_next = sum((p["pred_next"] or 0) * max(p["multiplier"], 1) for p in xi)
 
     return {
-        "entry_id": entry_id, "gameweek": gw,
+        "entry_id": entry_id, "gameweek": gw, "live": live,
+        "previous": dict(previous) if previous else None,
         "summary": dict(summary) if summary else {},
         "lines": lines, "bench": bench, "picks": picks,
         "expected_next": expected_next,

@@ -408,5 +408,22 @@ def test_team_page_with_predictions(pred_db):
     assert "16 pts" in r.text
     # Expected next GW = Saka 4.26 x 2 (captain); Raya has no prediction.
     assert "8.5" in r.text
+    # GW2 has no unfinished fixtures in the test data, so it isn't "live".
+    assert ">live<" not in r.text
     # The unmapped pick shows by element id, without a link to /player/None.
     assert "#999" in r.text and "/player/None" not in r.text
+
+
+def test_live_gameweek_shows_dashes_not_zeros(db_path):
+    _add_team(db_path)
+    c = sqlite3.connect(db_path)
+    # GW2 still has a match to play, and GW1's summary exists.
+    c.execute("INSERT INTO fixtures (season, fpl_fixture_id, gameweek, team_h, team_a, finished)"
+              " VALUES (?, 50, 2, 1, 2, 0)", (SEASON,))
+    c.execute("INSERT INTO entry_gw (season, entry_id, gameweek, points) VALUES (?, 1, 1, 41)",
+              (SEASON,))
+    c.commit()
+    c.close()
+    r = TestClient(create_app(db_path, season=SEASON)).get("/team")
+    assert ">live<" in r.text and "GW1 points" in r.text and ">41<" in r.text
+    assert "– pts" in r.text  # Raya has no GW2 match row yet
