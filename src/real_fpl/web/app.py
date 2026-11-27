@@ -32,7 +32,7 @@ from markdown_it import MarkdownIt
 
 from ..config import DB_PATH, PROJECT_ROOT, load_config
 from . import queries
-from .teams import team_style
+from .teams import kit_id, kit_sprite, team_style
 
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=HERE / "templates")
@@ -54,6 +54,9 @@ def _status(code: str | None) -> tuple[str, str]:
 
 templates.env.globals["status"] = _status
 templates.env.globals["team_style"] = team_style
+templates.env.globals["kit_id"] = kit_id
+# Built once at import: the shirts never change while the server runs.
+templates.env.globals["kit_sprite"] = kit_sprite()
 
 README = PROJECT_ROOT / "README.md"
 

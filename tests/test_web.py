@@ -273,7 +273,8 @@ def test_home_page(client):
     assert r.status_code == 200
     assert "Real FPL" in r.text and "In form" in r.text
     assert "Knock" in r.text  # Salah's news
-    assert "--team:#C8102E" in r.text  # Liverpool's chip colour
+    assert 'href="#kit-LIV"' in r.text  # Liverpool's shirt icon
+    assert 'id="kit-LIV"' in r.text    # ...and the sprite it points at
 
 
 def test_about_renders_readme(client):
@@ -284,6 +285,14 @@ def test_about_renders_readme(client):
     assert '<pre class="mermaid">' in r.text
 
 
-def test_unknown_team_gets_fallback_colour():
-    from real_fpl.web.teams import FALLBACK, team_style
-    assert FALLBACK[0] in team_style("XYZ") and FALLBACK[0] in team_style(None)
+def test_unknown_team_gets_fallback_kit():
+    from real_fpl.web.teams import FALLBACK, kit_id, team_style
+    assert kit_id("XYZ") == kit_id(None) == "kit-none"
+    assert FALLBACK.body in team_style("XYZ")
+
+
+def test_every_kit_is_distinct():
+    # The whole point of kits over colours: no two clubs may look identical.
+    from real_fpl.web.teams import KITS
+    looks = [(k.body, k.sleeves, k.stripes, k.trim) for k in KITS.values()]
+    assert len(set(looks)) == len(looks)

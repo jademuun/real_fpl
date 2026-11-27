@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import team %}
 {% block title %}{{ p.web_name }}{% endblock %}
 {% block head %}<script src="/static/chart.umd.min.js" defer></script>{% endblock %}
 {% block content %}
@@ -76,7 +77,7 @@
   {% for m in matches %}
     <tr>
       <td class="num">{{ m.gameweek }}</td>
-      <td><span class="team-chip" style="{{ team_style(m.opponent) }}">{{ m.opponent or "?" }}</span> {{ "H" if m.was_home else "A" }}</td>
+      <td>{{ team(m.opponent) }} {{ "H" if m.was_home else "A" }}</td>
       <td class="num">{{ m.minutes }}</td>
       <td class="num">{{ m.goals_scored }}</td>
       <td class="num">{{ m.assists }}</td>

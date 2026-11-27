@@ -1,3 +1,4 @@
+{% from "_macros.html" import team %}
 {#- The table on its own. players.html includes it for a full page; the route
     returns it alone when htmx asks, so a filter change re-renders only this. #}
 {% macro th(col, label, cls="") -%}
@@ -27,7 +28,7 @@
       {% set label, tone = status(p.status) %}
       <tr>
         <td><a href="/player/{{ p.opta_code }}">{{ p.web_name }}</a></td>
-        <td>{% if p.team %}<span class="team-chip" style="{{ team_style(p.team) }}">{{ p.team }}</span>{% endif %}</td>
+        <td>{% if p.team %}{{ team(p.team) }}{% endif %}</td>
         <td>{{ p.position or "" }}</td>
         <td class="num">{{ "%.1f"|format(p.price) if p.price is not none else "" }}</td>
         <td class="num">{{ p.form if p.form is not none else "" }}</td>

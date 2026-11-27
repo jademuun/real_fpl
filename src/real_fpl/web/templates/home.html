@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import team %}
 {% block title %}Home{% endblock %}
 {% block content %}
 <section class="hero">
@@ -33,7 +34,7 @@
     <ol class="ranked">
       {% for p in in_form %}
       <li>
-        <span class="team-chip" style="{{ team_style(p.team) }}">{{ p.team }}</span>
+        {{ team(p.team) }}
         <a href="/player/{{ p.opta_code }}">{{ p.web_name }}</a>
         <span class="muted small">{{ p.position }} · £{{ "%.1f"|format(p.price) }}m</span>
         <strong class="ranked-value">{{ p.form }}</strong>
@@ -49,7 +50,7 @@
       {% for n in news %}
       {% set label, tone = status(n.status) %}
       <li>
-        <span class="team-chip" style="{{ team_style(n.team) }}">{{ n.team }}</span>
+        {{ team(n.team) }}
         <a href="/player/{{ n.opta_code }}">{{ n.web_name }}</a>
         {% if n.status != "a" %}<span class="badge {{ tone }}">{{ label }}{% if n.chance_of_playing_next_round is not none %} {{ n.chance_of_playing_next_round }}%{% endif %}</span>{% endif %}
         <div class="muted small">{{ n.news }}</div>

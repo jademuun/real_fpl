@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import team %}
 {% block title %}Fixtures{% endblock %}
 {% block content %}
 <h1>Fixtures</h1>
@@ -18,7 +19,7 @@
   <tbody>
   {% for row in grid.rows %}
     <tr>
-      <th scope="row"><span class="team-chip" style="{{ team_style(row.short_name) }}">{{ row.short_name }}</span> {{ row.team }}</th>
+      <th scope="row">{{ team(row.short_name) }} {{ row.team }}</th>
       {% for cell in row.cells %}
         {#- A cell holds 0 fixtures (blank GW), 1, or 2 (double GW). #}
         <td class="{{ 'blank' if not cell }}">
