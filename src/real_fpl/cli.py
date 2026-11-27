@@ -88,6 +88,17 @@ def fetch_historical(
         )
 
 
+@app.command("build-features")
+def build_features() -> None:
+    """Rebuild the derived Phase 2 tables from the facts."""
+    from .features.target import TABLE, build_target
+
+    conn = db.connect()
+    db.init_db(conn)
+    n = build_target(conn)
+    console.print(f"[green]{TABLE}[/green] {n:,} rows")
+
+
 @app.command("export")
 def export_cmd(
     table: str = typer.Option("player_gw_enriched", "--table"),
