@@ -126,3 +126,97 @@ def test_player_who_left_scores_zero_then_drops_out(conn):
 def test_rebuild_is_idempotent(conn):
     n = conn.execute(f"SELECT COUNT(*) FROM {TABLE}").fetchone()[0]
     assert build_target(conn) == n
+
+
+# ---------------------------------------------------------------------------
+# model_rows: features as of the deadline
+# ---------------------------------------------------------------------------
+
+from real_fpl.features.model_rows import FEATURES, build_all  # noqa: E402
+
+SCORES = {11: (1, 0), 12: (2, 2), 21: (0, 1), 22: (3, 0), 31: (1, 1), 41: (2, 0), 42: (1, 1)}
+POSITIONS = {"p_reg": "DEF", "p_new": "MID", "p_move": "FWD", "p_left": "GKP"}
+
+
+@pytest.fixture
+def built(conn):
+    for fx, (h, a) in SCORES.items():
+        conn.execute("UPDATE fixtures SET team_h_score=?, team_a_score=? "
+                     "WHERE season=? AND fpl_fixture_id=?", (h, a, S, fx))
+    # Simple, hand-checkable stats derived from each row's points and minutes.
+    conn.execute("""UPDATE player_gw SET
+        expected_goals = total_points / 10.0, expected_assists = 0.0,
+        expected_goal_involvements = total_points / 10.0,
+        starts = minutes >= 60, bonus = 0, bps = 10, value = 50,
+        defensive_contribution = 11""")
+    db.upsert(conn, "season_players",
+              [{"season": S, "opta_code": o, "position": p} for o, p in POSITIONS.items()],
+              key=("season", "opta_code"))
+    conn.commit()
+    build_all(conn)
+    return conn
+
+
+def feature(conn, opta, t, fixture, col):
+    return conn.execute(f"SELECT {col} FROM model_rows WHERE opta_code=? AND decision_gw=? "
+                        "AND fpl_fixture_id=?", (opta, t, fixture)).fetchone()[0]
+
+
+def test_player_features_use_matches_before_the_deadline(built):
+    # Before GW3: GW1 (2 pts) and GW2 (6 pts) only.
+    assert feature(built, "p_reg", 3, 41, "points_pm") == pytest.approx(4.0)
+    assert feature(built, "p_reg", 3, 41, "n_listed") == 2
+    # Before GW5: both GW4 matches too (2+6+9+1)/4.
+    assert feature(built, "p_reg", 5, 51, "points_pm") == pytest.approx(4.5)
+
+
+def test_features_are_frozen_across_horizons(built):
+    """The GW4 rows decided before GW2 use the same player numbers as the GW2 row."""
+    for col in ("points_pm", "minutes_pm", "xgi90", "price"):
+        vals = {feature(built, "p_reg", 2, fx, col) for fx in (21, 41, 42)}
+        assert len(vals) == 1, col
+
+
+def test_opponent_is_measured_as_of_the_same_deadline(built):
+    """Before GW4, team 1's two GW4 opponents: team 4 has played 2 matches (it
+    blanked GW3), team 2 has played 3. Each opponent is measured up to its own
+    most recent match. (Before GW3 both had played 2: a GW3 match is not before
+    the GW3 deadline -- the first draft of this test got that wrong.)"""
+    assert feature(built, "p_reg", 4, 41, "opp_n") == 2   # vs team 4
+    assert feature(built, "p_reg", 4, 42, "opp_n") == 3   # vs team 2
+
+
+def test_dc_rate_is_null_where_it_cannot_score(built):
+    assert feature(built, "p_reg", 3, 41, "dc_hit_rate") == pytest.approx(1.0)  # DEF, 11 >= 10
+    assert feature(built, "p_move", 3, 31, "dc_hit_rate") is None              # FWD
+    assert feature(built, "p_left", 2, 21, "dc_hit_rate") is None              # GKP
+
+
+def _features_before(conn, last_t):
+    cols = ", ".join(FEATURES)
+    return conn.execute(
+        f"SELECT season, opta_code, decision_gw, fpl_fixture_id, {cols} FROM model_rows "
+        "WHERE decision_gw <= ? ORDER BY 1, 2, 3, 4", (last_t,)).fetchall()
+
+
+@pytest.mark.parametrize("t", [2, 3, 4, 5])
+def test_no_feature_sees_the_future(built, t):
+    """THE leakage test. Rewrite everything that happened from gameweek t on --
+    points, minutes, xG, price, scores -- and rebuild. Every feature on a row
+    decided at or before t must be unchanged; only targets may move."""
+    before = [tuple(r) for r in _features_before(built, t)]
+    targets_before = built.execute("SELECT SUM(points) FROM model_rows").fetchone()[0]
+
+    built.execute("""UPDATE player_gw SET total_points = total_points + 7, minutes = 90,
+                     starts = 1, expected_goals = expected_goals + 0.9,
+                     expected_goal_involvements = expected_goal_involvements + 0.9,
+                     value = value + 9, bonus = 3, bps = 40, defensive_contribution = 0
+                     WHERE gameweek >= ?""", (t,))
+    built.execute("UPDATE fixtures SET team_h_score = team_h_score + 3 WHERE gameweek >= ?", (t,))
+    built.commit()
+    build_all(built)
+
+    after = [tuple(r) for r in _features_before(built, t)]
+    assert after == before
+    if t <= 4:  # there were finished matches from t on, so the change must reach the targets
+        assert built.execute("SELECT SUM(points) FROM model_rows").fetchone()[0] != targets_before
