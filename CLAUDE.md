@@ -17,7 +17,12 @@ needed, is the sum of the per-match predictions. A double gameweek = two rows sh
 `gameweek`; a blank gameweek = no training row (it shows as 0 only in per-gameweek summaries).
 `points` (the target) is whole actual points; `pred_points` is stored at full precision and only
 *displayed* to one decimal. Built by `real-fpl build-features` into `target_rows`
-(`src/real_fpl/features/target.py`); derived tables are rebuilt from scratch, never upserted. The model ladder is
+(`src/real_fpl/features/target.py`); derived tables are rebuilt from scratch, never upserted.
+Features live in `model_rows` (`features/model_rows.py`): every one is measured as of
+`asof_fixture_id`, the club's last match before the deadline. A model reads only the columns in
+`FEATURES`, never `points`/`actual_minutes`. Any new feature must keep
+`test_no_feature_sees_the_future` passing. Compare models on squared error or Poisson deviance,
+not MAE: MAE rewards the median, and most rows are 0. The model ladder is
 baselines (last-4 average, FPL's `xP`), then a Tweedie/Poisson GLM, then gradient-boosted trees,
 each evaluated on a **season-based split, never random**. Ranking and transfer decisions are a
 later Part 2.

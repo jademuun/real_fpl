@@ -124,7 +124,8 @@ data/                   database, raw archive, exports (gitignored, reproducible
 
 - Features for predicting each match in the next 3 gameweeks (in progress): history for 2024-25
   and 2025-26 is backfilled, and the target table (`target_rows`, one row per player per upcoming
-  match per deadline) is built. Next: lagged player and team features.
+  match per deadline) and the feature table (`model_rows`, 32 features measured as of each
+  deadline, with a leakage test) are built. Next: baselines and the first model.
 - Later: rest and rotation (needs European and cup fixtures), a date dimension.
 - A model: baselines, then a GLM, then gradient-boosted trees, tested on a season-based split.
   Buy and sell suggestions come after that.
