@@ -64,6 +64,30 @@ def fetch_fpl(
             console.print(f"[yellow]{len(hist['failures'])} players failed[/yellow]")
 
 
+@app.command("fetch-historical")
+def fetch_historical(
+    season: list[str] = typer.Option(
+        None, "--season", help="Season like 2024-25; repeatable. Default: all in config."
+    ),
+) -> None:
+    """Backfill closed seasons from the historical mirror (one-off per season)."""
+    from .config import load_config
+    from .sources import historical
+
+    conn = db.connect()
+    db.init_db(conn)
+    seasons = season or load_config()["historical"]["seasons"]
+    for s in seasons:
+        with console.status(f"backfilling {s}..."):
+            r = historical.ingest_season(conn, s)
+        console.print(
+            f"[green]{s}[/green] player_gw {r['player_gw']:,}, fixtures {r['fixtures']}, "
+            f"teams {r['teams']}, season_players {r['season_players']}, "
+            f"new players {r['new_players']}"
+            + (f", [yellow]{r['unmapped_rows']} unmapped rows[/yellow]" if r["unmapped_rows"] else "")
+        )
+
+
 @app.command("export")
 def export_cmd(
     table: str = typer.Option("player_gw_enriched", "--table"),

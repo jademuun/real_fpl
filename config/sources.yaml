@@ -41,13 +41,15 @@ pl_official:
 historical:
   # vaastav/Fantasy-Premier-League mirrors FPL's own per-gameweek data as CSVs
   # going back to 2016-17. Used only to backfill seasons the live API no longer
-  # exposes in per-match detail.
+  # exposes in per-match detail. Closed seasons only: the current one comes from
+  # the live API, which is authoritative while the season is being played.
   base_url: "https://raw.githubusercontent.com/vaastav/Fantasy-Premier-League/master/data"
   rate_limit_per_sec: 5.0
   seasons:
     - "2024-25"
     - "2025-26"
-    - "2026-27"
   files:
     merged_gw: "/{season}/gws/merged_gw.csv"
     players_raw: "/{season}/players_raw.csv"
+    fixtures: "/{season}/fixtures.csv"
+    teams: "/{season}/teams.csv"
