@@ -122,6 +122,8 @@ money in practice.
   diverging histories of values that can never be re-fetched (invariant 3). Need fresher data?
   Run `scripts/pull-db.sh` in `~/repo/real_fpl`.
 - The server's address isn't in the repo: each laptop sets `REAL_FPL_REMOTE_DB` itself.
+- The tracked FPL team id isn't in the repo either: only the server sets `REAL_FPL_ENTRY_ID`
+  (see "Contract: entry").
 - **A pull replaces the whole database file**, including derived tables built on the laptop
   (`target_rows`, `predictions`). After a pull, the model worktree rebuilds them
   (`real-fpl build-features`, ~3 s). Once the model is merged to `master`, the plan is for the
@@ -181,6 +183,27 @@ Rules for readers:
   time; the "current" one is the latest `created_at`.
 - The live predictions are the rows with the season's highest `decision_gw`.
 - Until the model exists the table is absent: show "no predictions yet".
+
+### Contract: entry (fetch writes, UI reads)
+
+Agreed 2026-11-27 for the UI's "My team" page; approved by Jade. One FPL manager's team,
+fetched from two public FPL endpoints (`/entry/{id}/history/`, `/entry/{id}/event/{gw}/picks/`)
+as part of `fetch-fpl --snapshot`, **only when `REAL_FPL_ENTRY_ID` is set**. That is set on the
+server only, in the snapshot service's environment; the id never goes into a committed file.
+No manager names are stored.
+
+- `entry_gw (season, entry_id, gameweek, points, total_points, overall_rank, bank, value,
+  event_transfers, event_transfers_cost, points_on_bench, active_chip)`,
+  PK (season, entry_id, gameweek). `bank`/`value` in tenths of a million; `points` after hits.
+- `entry_picks (season, entry_id, gameweek, slot, fpl_element_id, opta_code, multiplier,
+  is_captain, is_vice_captain)`, PK (season, entry_id, gameweek, slot). `slot` 1-11 = starting
+  XI, 12-15 = bench in order; `multiplier` 0 benched, 2 captain, 3 triple captain.
+  **`opta_code` is NULL** if the element had no `season_players` row; `fpl_element_id` is
+  always kept, so the pick still shows.
+- Settled facts once a deadline passes, so upserted. Picks are public only after a deadline:
+  transfers made since the last deadline appear only after the next one.
+- Readers show the entry with the newest gameweek and need no id. Until the tables have rows:
+  "no team yet".
 
 ## Never commit
 
