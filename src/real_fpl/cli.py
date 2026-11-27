@@ -99,6 +99,30 @@ def build_features() -> None:
         console.print(f"[green]{table}[/green] {n:,} rows")
 
 
+@app.command("train")
+def train_cmd(
+    no_write: bool = typer.Option(False, "--no-write", help="Evaluate only; don't write predictions."),
+) -> None:
+    """Compare baselines and trees, then write live predictions."""
+    import pandas as pd
+
+    from .model.train import run
+
+    conn = db.connect()
+    db.init_db(conn)
+    r = run(conn, write=not no_write)
+    pd.set_option("display.width", 160)
+    cols = ["group", "model", "n", "rmse", "poisson_dev", "corr", "bias", "mae"]
+    console.print("[bold]Validation (2025-26), models trained on 2024-25[/bold]")
+    # Plain print: rich would read "trees[poisson, 200]" as markup and drop it.
+    print(r.validation[cols].round(3).to_string(index=False))
+    print(f"\nchosen: {r.chosen}")
+    console.print("\n[bold]Test (2026-27 so far), trained on 2024-25 + 2025-26[/bold]")
+    print(r.test[cols].round(3).to_string(index=False))
+    for version, n in r.written.items():
+        console.print(f"[green]predictions[/green] {version}: {n:,} rows")
+
+
 @app.command("export")
 def export_cmd(
     table: str = typer.Option("player_gw_enriched", "--table"),
