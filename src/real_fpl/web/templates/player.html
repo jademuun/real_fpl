@@ -20,6 +20,27 @@
   <p class="muted">Not in the {{ season }} squad list — shown from past seasons only.</p>
 {% endif %}
 
+<section class="predictions">
+  <h2>Predicted points</h2>
+  {% if predictions %}
+    <div class="pred-cards">
+    {% for r in predictions %}
+      <div class="pred-card">
+        <span class="muted">GW{{ r.gameweek }}</span>
+        <strong>{{ "%.1f"|format(r.pred_points) }}</strong>
+        {% if r.n_fixtures == 2 %}<span class="tag">Double GW</span>
+        {% elif r.n_fixtures == 0 %}<span class="tag">Blank GW</span>{% endif %}
+      </div>
+    {% endfor %}
+    </div>
+    <p class="muted small">Model <code>{{ pred.model_version }}</code>, as of before GW{{ pred.decision_gw }}.</p>
+  {% elif pred %}
+    <p class="muted">The current model has no prediction for this player.</p>
+  {% else %}
+    <p class="muted">No predictions yet.</p>
+  {% endif %}
+</section>
+
 {% if seasons %}
 {#- Changing the select submits the form, which reloads the page with ?season=…
     One line of inline JavaScript is enough here; no htmx needed. #}

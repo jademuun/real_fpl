@@ -72,3 +72,9 @@ table.data .num { text-align: right; font-variant-numeric: tabular-nums; }
 .fdr-3 { background: #e7e7e7; color: #000; }
 .fdr-4 { background: #ff1751; color: #fff; }
 .fdr-5 { background: #80072d; color: #fff; }
+
+.tag { font-size: 0.72rem; padding: 0 0.35rem; border-radius: 4px; background: var(--line); color: var(--fg); font-weight: 600; }
+h2 { font-size: 1.1rem; margin: 1.25rem 0 0.5rem; }
+.pred-cards { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.pred-card { display: flex; flex-direction: column; gap: 0.15rem; min-width: 7rem; padding: 0.6rem 0.9rem; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.pred-card strong { font-size: 1.4rem; font-variant-numeric: tabular-nums; }

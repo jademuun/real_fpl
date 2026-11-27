@@ -77,6 +77,25 @@ def create_app(db_path: Path | None = None, season: str | None = None) -> FastAP
     app = FastAPI(title="real_fpl")
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
+    @app.exception_handler(sqlite3.OperationalError)
+    def data_refreshing(request: Request, exc: sqlite3.OperationalError):
+        """Show "data refreshing" instead of a crash while the DB is being rebuilt.
+
+        The model worktree drops and rebuilds derived tables (target_rows,
+        predictions) for a few seconds at a time, and pull-db.sh replaces the
+        whole file. A page that lands in that window sees "no such table" or
+        "database is locked". That is a normal, temporary state, so it gets a
+        503 ("try again shortly") page. Any other database error is a real bug
+        and is re-raised.
+        """
+        msg = str(exc)
+        if "no such table" in msg or "locked" in msg or "unable to open" in msg:
+            return templates.TemplateResponse(
+                request, "refreshing.html", {"season": season}, status_code=503,
+                headers={"Retry-After": "5"},
+            )
+        raise exc
+
     def get_conn() -> Iterator[sqlite3.Connection]:
         """One read-only connection per request, closed when the request ends.
 
@@ -90,7 +109,9 @@ def create_app(db_path: Path | None = None, season: str | None = None) -> FastAP
         only one request at a time.
         """
         uri = db_path.resolve().as_uri() + "?mode=ro"
-        conn = sqlite3.connect(uri, uri=True, check_same_thread=False)
+        # timeout: wait up to 5s for a writer to finish before giving up with
+        # "database is locked", which is usually long enough to ride it out.
+        conn = sqlite3.connect(uri, uri=True, check_same_thread=False, timeout=5)
         conn.row_factory = sqlite3.Row
         try:
             yield conn
@@ -114,14 +135,15 @@ def create_app(db_path: Path | None = None, season: str | None = None) -> FastAP
             "q": (q or "").strip(),
             "max_price": _optional_float(max_price),
         }
-        if sort not in queries.SORTS:
+        pred = queries.live_predictions(conn, season)
+        if sort not in queries.SORTS or (sort == "pred" and not pred):
             sort = queries.DEFAULT_SORT
         desc = dir != "asc"
 
         players = queries.latest_players(
             conn, season,
             pos=filters["pos"] or None, team=filters["team"], q=filters["q"] or None,
-            max_price=filters["max_price"], sort=sort, desc=desc,
+            max_price=filters["max_price"], sort=sort, desc=desc, pred=pred,
         )
 
         def sort_url(col: str) -> str:
@@ -143,6 +165,7 @@ def create_app(db_path: Path | None = None, season: str | None = None) -> FastAP
             "sort_url": sort_url, "positions": queries.POSITIONS,
             "teams": queries.teams(conn, season), "season": season,
             "snapshot_ts": queries.latest_snapshot_ts(conn, season),
+            "pred": pred,
         }
         # Same URL, two answers. A normal visit gets the whole page. When htmx
         # makes the request (a filter changed), it sends the HX-Request header
@@ -167,6 +190,7 @@ def create_app(db_path: Path | None = None, season: str | None = None) -> FastAP
         seasons = queries.player_seasons(conn, opta_code)
         shown = season_param if season_param in seasons else (seasons[0] if seasons else season)
         matches = queries.player_gameweeks(conn, opta_code, shown)
+        pred = queries.live_predictions(conn, season)
         return templates.TemplateResponse(
             request, "player.html",
             {
@@ -174,6 +198,10 @@ def create_app(db_path: Path | None = None, season: str | None = None) -> FastAP
                 "context": queries.player_season_context(conn, opta_code, shown),
                 "matches": matches,
                 "chart": queries.per_gameweek_series(matches),
+                "pred": pred,
+                "predictions": (
+                    queries.player_predictions(conn, opta_code, season, pred) if pred else []
+                ),
             },
         )
 

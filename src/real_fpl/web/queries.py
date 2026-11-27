@@ -30,6 +30,9 @@ SORTS: dict[str, str] = {
     "form": "s.form",
     "selected": "s.selected_by_percent",
     "points": "s.total_points",
+    # Only meaningful when predictions exist; otherwise every row is NULL and
+    # the sort is a no-op rather than an error.
+    "pred": "pred_points",
 }
 DEFAULT_SORT = "points"
 
@@ -64,6 +67,7 @@ def latest_players(
     max_price: float | None = None,
     sort: str = DEFAULT_SORT,
     desc: bool = True,
+    pred: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Every player in the season's most recent snapshot, filtered and sorted.
 
@@ -96,6 +100,22 @@ def latest_players(
         # Prices are stored in tenths of a million (FPL's unit); the page talks in £m.
         params["max_cost"] = round(max_price * 10)
 
+    if pred:
+        # The live prediction for the very next gameweek (horizon 0), from one
+        # model. A LEFT JOIN so players the model skipped still appear.
+        pred_select = "pg.pred_points, pg.n_fixtures"
+        pred_join = """
+        LEFT JOIN predictions_gw pg
+               ON pg.season = :season AND pg.opta_code = s.opta_code
+              AND pg.decision_gw = :decision_gw AND pg.gameweek = :decision_gw
+              AND pg.model_version = :model_version"""
+        params.update(decision_gw=pred["decision_gw"], model_version=pred["model_version"])
+    else:
+        pred_select = "NULL AS pred_points, NULL AS n_fixtures"
+        pred_join = ""
+
+    # SQLite sorts NULLs first in ascending order; push them last either way
+    # so "no value" never tops the table.
     direction = "DESC" if desc else "ASC"
     sql = f"""
         SELECT s.opta_code, p.web_name, p.first_name, p.second_name,
@@ -103,14 +123,16 @@ def latest_players(
                t.short_name AS team, t.fpl_team_id,
                s.now_cost / 10.0 AS price,
                s.form, s.selected_by_percent, s.total_points,
-               s.status, s.news, s.chance_of_playing_next_round
+               s.status, s.news, s.chance_of_playing_next_round,
+               {pred_select}
         FROM player_snapshots s
         JOIN players p ON p.opta_code = s.opta_code
         LEFT JOIN season_players sp ON sp.opta_code = s.opta_code AND sp.season = :season
         LEFT JOIN teams t ON t.season = :season
                          AND t.fpl_team_id = COALESCE(sp.fpl_team_id, p.fpl_team_id)
+        {pred_join}
         WHERE {' AND '.join(where)}
-        ORDER BY {SORTS[sort]} {direction}, p.web_name COLLATE NOCASE
+        ORDER BY {SORTS[sort]} IS NULL, {SORTS[sort]} {direction}, p.web_name COLLATE NOCASE
     """
     return _rows(conn.execute(sql, params))
 
@@ -273,3 +295,61 @@ def fixture_grid(
         for t in team_rows
     ]
     return {"gameweeks": gws, "rows": rows}
+
+
+# --- predictions (contract: CLAUDE.md, "Contract: predictions") -------------
+
+def _has_table(conn: sqlite3.Connection, name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE name = ? AND type IN ('table', 'view')", (name,)
+    ).fetchone()
+    return row is not None
+
+
+def live_predictions(conn: sqlite3.Connection, season: str) -> dict[str, Any] | None:
+    """Which predictions to show: the newest model, at its latest decision_gw.
+
+    Several model_versions coexist on purpose (the baseline stays around to
+    compare against), so "current" means the one created most recently, and
+    "live" means its highest decision_gw. Returns None until the model has
+    written anything -- the page then says "no predictions yet".
+    """
+    if not _has_table(conn, "predictions_gw") or not _has_table(conn, "predictions"):
+        return None
+    row = conn.execute(
+        """
+        SELECT model_version, MAX(created_at) AS created_at
+        FROM predictions WHERE season = ?
+        GROUP BY model_version ORDER BY created_at DESC LIMIT 1
+        """,
+        (season,),
+    ).fetchone()
+    if row is None:
+        return None
+    decision_gw = conn.execute(
+        "SELECT MAX(decision_gw) FROM predictions WHERE season = ? AND model_version = ?",
+        (season, row["model_version"]),
+    ).fetchone()[0]
+    return {"model_version": row["model_version"], "created_at": row["created_at"],
+            "decision_gw": decision_gw}
+
+
+def player_predictions(
+    conn: sqlite3.Connection, opta_code: str, season: str, pred: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """The player's predicted points for each of the next gameweeks (horizon 0-2).
+
+    n_fixtures says why a number is high or zero: 2 is a double gameweek,
+    0 a blank one (pred_points 0.0, no match to score in).
+    """
+    return _rows(
+        conn.execute(
+            """
+            SELECT gameweek, pred_points, n_fixtures
+            FROM predictions_gw
+            WHERE season = ? AND opta_code = ? AND decision_gw = ? AND model_version = ?
+            ORDER BY gameweek
+            """,
+            (season, opta_code, pred["decision_gw"], pred["model_version"]),
+        )
+    )

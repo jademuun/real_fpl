@@ -183,3 +183,83 @@ def test_connection_is_read_only(db_path):
     c = sqlite3.connect(uri, uri=True)
     with pytest.raises(sqlite3.OperationalError, match="readonly"):
         c.execute("DELETE FROM teams")
+
+
+# --- predictions (contract in CLAUDE.md) ------------------------------------
+# The model hasn't written any yet, so these build fake rows matching the
+# contract. predictions_gw is a view on the model side; here it is a plain
+# table with the same columns, which is all a reader can see anyway.
+
+@pytest.fixture
+def pred_db(db_path):
+    c = sqlite3.connect(db_path)
+    c.executescript("""
+        CREATE TABLE predictions (
+            season TEXT NOT NULL, opta_code TEXT NOT NULL, decision_gw INTEGER NOT NULL,
+            fpl_fixture_id INTEGER NOT NULL, gameweek INTEGER NOT NULL, horizon INTEGER NOT NULL,
+            pred_points REAL NOT NULL, model_version TEXT NOT NULL, created_at TEXT NOT NULL,
+            PRIMARY KEY (season, opta_code, decision_gw, fpl_fixture_id, model_version));
+        CREATE TABLE predictions_gw (
+            season TEXT, opta_code TEXT, decision_gw INTEGER, gameweek INTEGER,
+            model_version TEXT, pred_points REAL, n_fixtures INTEGER);
+    """)
+    old, new = "2026-09-01T00:00:00Z", "2026-09-02T00:00:00Z"
+    c.executemany(
+        "INSERT INTO predictions VALUES (?,?,?,?,?,?,?,?,?)",
+        [
+            # The baseline is older: the newer trees_v1 must win.
+            (SEASON, "p1", 4, 10, 4, 0, 9.9, "baseline_last4", old),
+            (SEASON, "p1", 3, 99, 3, 0, 1.0, "trees_v1", new),   # superseded decision_gw
+            (SEASON, "p1", 4, 10, 4, 0, 4.26, "trees_v1", new),
+        ],
+    )
+    c.executemany(
+        "INSERT INTO predictions_gw VALUES (?,?,?,?,?,?,?)",
+        [
+            (SEASON, "p1", 4, 4, "baseline_last4", 9.9, 1),
+            (SEASON, "p1", 3, 3, "trees_v1", 1.0, 1),
+            (SEASON, "p1", 4, 4, "trees_v1", 4.26, 1),
+            (SEASON, "p1", 4, 5, "trees_v1", 10.04, 2),
+            (SEASON, "p1", 4, 6, "trees_v1", 0.0, 0),
+            (SEASON, "p2", 4, 4, "trees_v1", 7.0, 2),
+        ],
+    )
+    c.commit()
+    c.close()
+    return db_path
+
+
+def test_no_predictions_yet(conn, client):
+    assert queries.live_predictions(conn, SEASON) is None
+    assert "No predictions yet" in client.get("/").text
+    assert "No predictions yet" in client.get("/player/p1").text
+
+
+def test_live_predictions_pick_newest_model_and_latest_gw(pred_db):
+    c = sqlite3.connect(pred_db)
+    c.row_factory = sqlite3.Row
+    live = queries.live_predictions(c, SEASON)
+    assert (live["model_version"], live["decision_gw"]) == ("trees_v1", 4)
+    rows = queries.latest_players(c, SEASON, pred=live, sort="pred")
+    assert [(r["web_name"], r["pred_points"]) for r in rows] == [
+        ("Salah", 7.0), ("Saka", 4.26), ("Raya", None)]  # unpredicted player last
+    assert [r["n_fixtures"] for r in queries.player_predictions(c, "p1", SEASON, live)] == [1, 2, 0]
+    c.close()
+
+
+def test_predictions_shown_to_one_decimal(pred_db):
+    client = TestClient(create_app(pred_db, season=SEASON))
+    page = client.get("/").text
+    assert "Pred GW4" in page and "4.3" in page and "DGW" in page
+    player = client.get("/player/p1").text
+    assert "10.0" in player and "Double GW" in player and "Blank GW" in player
+
+
+def test_missing_table_means_refreshing_not_crash(db_path):
+    # Simulates the model worktree mid-rebuild, or pull-db.sh swapping the file.
+    c = sqlite3.connect(db_path)
+    c.execute("DROP TABLE fixtures")
+    c.commit()
+    c.close()
+    r = TestClient(create_app(db_path, season=SEASON)).get("/fixtures")
+    assert r.status_code == 503 and "refreshing" in r.text

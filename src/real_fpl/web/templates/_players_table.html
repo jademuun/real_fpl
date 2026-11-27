@@ -18,7 +18,7 @@
         {{ th("form", "Form", "num") }}
         {{ th("selected", "Sel %", "num") }}
         {{ th("points", "Pts", "num") }}
-        {#- Phase 3: the model's predicted points go here as another sortable column. #}
+        {% if pred %}{{ th("pred", "Pred GW%d" % pred.decision_gw, "num") }}{% endif %}
         <th>Status</th>
       </tr>
     </thead>
@@ -33,6 +33,15 @@
         <td class="num">{{ p.form if p.form is not none else "" }}</td>
         <td class="num">{{ p.selected_by_percent if p.selected_by_percent is not none else "" }}</td>
         <td class="num">{{ p.total_points if p.total_points is not none else "" }}</td>
+        {% if pred %}
+        {#- Rounded for display only; the stored value keeps full precision. #}
+        <td class="num">
+          {%- if p.pred_points is not none %}{{ "%.1f"|format(p.pred_points) }}
+            {%- if p.n_fixtures == 2 %} <span class="tag" title="Double gameweek">DGW</span>
+            {%- elif p.n_fixtures == 0 %} <span class="tag" title="Blank gameweek: no match">blank</span>{% endif %}
+          {%- endif -%}
+        </td>
+        {% endif %}
         <td>
           {% if p.status and p.status != "a" %}
             <span class="badge {{ tone }}" title="{{ p.news or '' }}">
@@ -42,7 +51,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="8" class="muted">No players match these filters.</td></tr>
+      <tr><td colspan="{{ 9 if pred else 8 }}" class="muted">No players match these filters.</td></tr>
       {% endfor %}
     </tbody>
   </table>

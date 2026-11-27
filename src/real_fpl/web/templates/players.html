@@ -2,7 +2,11 @@
 {% block title %}Players{% endblock %}
 {% block content %}
 <h1>Players</h1>
-<p class="muted">Latest snapshot: {{ snapshot_ts or "none yet" }}</p>
+<p class="muted">
+  Latest snapshot: {{ snapshot_ts or "none yet" }} ·
+  {% if pred %}Predictions: <code>{{ pred.model_version }}</code>, made before GW{{ pred.decision_gw }} ({{ pred.created_at }})
+  {% else %}No predictions yet{% endif %}
+</p>
 
 {#- A plain HTML form: without JavaScript, pressing Filter reloads the page with
     the choices in the URL (?pos=MID&q=salah). htmx upgrades it: on any change
