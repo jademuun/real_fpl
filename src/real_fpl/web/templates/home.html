@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1 class="hero-title">Real FPL</h1>
+  <p class="hero-lead">
+    Which Fantasy Premier League players are worth buying, and which to sell, worked out
+    from data instead of gut feeling. Every player's price, form and injury news is saved
+    each morning, so that the model learns only from what was known at the time.
+  </p>
+  <div class="hero-actions">
+    <a class="button primary" href="/players">Browse players</a>
+    <a class="button" href="/fixtures">Fixture difficulty</a>
+    <a class="button ghost" href="/about">How it's built →</a>
+  </div>
+</section>
+
+{#- The numbers that say whether the data is healthy: if "last snapshot" is
+    days old, the home server's daily fetch (or the laptop's pull) has stopped. #}
+<section class="stats">
+  <div class="stat"><span class="stat-value">{{ "{:,}".format(stats.players) }}</span><span class="stat-label">players this season</span></div>
+  <div class="stat"><span class="stat-value">{{ "{:,}".format(stats.matches) }}</span><span class="stat-label">player-matches recorded</span></div>
+  <div class="stat"><span class="stat-value">{{ stats.seasons }}</span><span class="stat-label">seasons of history</span></div>
+  <div class="stat"><span class="stat-value">{{ stats.snapshots }}</span><span class="stat-label">daily snapshots</span></div>
+  <div class="stat"><span class="stat-value">{{ "GW%d" % next_gw if next_gw else "—" }}</span><span class="stat-label">next gameweek</span></div>
+</section>
+<p class="muted small">Last snapshot: {{ stats.last_snapshot or "none yet" }} ·
+  {% if pred %}predictions from <code>{{ pred.model_version }}</code>{% else %}no predictions yet — the model is being built{% endif %}</p>
+
+<div class="panels">
+  <section class="panel">
+    <h2>In form</h2>
+    <ol class="ranked">
+      {% for p in in_form %}
+      <li>
+        <span class="team-chip" style="{{ team_style(p.team) }}">{{ p.team }}</span>
+        <a href="/player/{{ p.opta_code }}">{{ p.web_name }}</a>
+        <span class="muted small">{{ p.position }} · £{{ "%.1f"|format(p.price) }}m</span>
+        <strong class="ranked-value">{{ p.form }}</strong>
+      </li>
+      {% endfor %}
+    </ol>
+    <p class="muted small">FPL "form": average points per match over the last 30 days.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Latest news</h2>
+    <ul class="news">
+      {% for n in news %}
+      {% set label, tone = status(n.status) %}
+      <li>
+        <span class="team-chip" style="{{ team_style(n.team) }}">{{ n.team }}</span>
+        <a href="/player/{{ n.opta_code }}">{{ n.web_name }}</a>
+        {% if n.status != "a" %}<span class="badge {{ tone }}">{{ label }}{% if n.chance_of_playing_next_round is not none %} {{ n.chance_of_playing_next_round }}%{% endif %}</span>{% endif %}
+        <div class="muted small">{{ n.news }}</div>
+      </li>
+      {% else %}
+      <li class="muted">No news.</li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+{% endblock %}

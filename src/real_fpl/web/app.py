@@ -28,8 +28,11 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from ..config import DB_PATH, load_config
+from markdown_it import MarkdownIt
+
+from ..config import DB_PATH, PROJECT_ROOT, load_config
 from . import queries
+from .teams import team_style
 
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=HERE / "templates")
@@ -50,6 +53,35 @@ def _status(code: str | None) -> tuple[str, str]:
 
 
 templates.env.globals["status"] = _status
+templates.env.globals["team_style"] = team_style
+
+README = PROJECT_ROOT / "README.md"
+
+
+def _markdown() -> MarkdownIt:
+    """A Markdown renderer close to what GitHub shows for the README.
+
+    html=False: raw HTML inside the Markdown is escaped, not passed through.
+    The README is our own file, but a renderer that can't emit <script> is one
+    less thing to think about.
+
+    Fenced ```mermaid blocks are left for mermaid.js to draw in the browser,
+    which is how GitHub renders the README's pipeline diagram too.
+    """
+    md = MarkdownIt("commonmark", {"html": False}).enable("table")
+    default_fence = md.renderer.rules.get("fence")
+
+    def fence(tokens, idx, options, env):
+        token = tokens[idx]
+        if token.info.strip() == "mermaid":
+            return f'<pre class="mermaid">{md.utils.escapeHtml(token.content)}</pre>\n'
+        return default_fence(tokens, idx, options, env)
+
+    md.renderer.rules["fence"] = fence
+    return md
+
+
+MARKDOWN = _markdown()
 
 
 def _optional_int(value: str | None) -> int | None:
@@ -119,6 +151,29 @@ def create_app(db_path: Path | None = None, season: str | None = None) -> FastAP
             conn.close()
 
     @app.get("/", response_class=HTMLResponse)
+    def home_page(request: Request, conn: sqlite3.Connection = Depends(get_conn)):
+        return templates.TemplateResponse(
+            request, "home.html",
+            {
+                "season": season,
+                "stats": queries.site_stats(conn, season),
+                "next_gw": queries.next_gameweek(conn, season),
+                "in_form": queries.in_form(conn, season),
+                "news": queries.latest_news(conn, season),
+                "pred": queries.live_predictions(conn, season),
+            },
+        )
+
+    @app.get("/about", response_class=HTMLResponse)
+    def about_page(request: Request):
+        # Read on every request, not once at startup: edit README.md and reload
+        # the page to see it. It is one small file, so this costs nothing.
+        html = MARKDOWN.render(README.read_text(encoding="utf-8"))
+        return templates.TemplateResponse(
+            request, "about.html", {"season": season, "readme_html": html}
+        )
+
+    @app.get("/players", response_class=HTMLResponse)
     def players_page(
         request: Request,
         pos: str | None = None,
@@ -158,7 +213,7 @@ def create_app(db_path: Path | None = None, season: str | None = None) -> FastAP
                 new_dir = "asc" if col in ("name", "team", "pos") else "desc"
             params = {k: v for k, v in filters.items() if v not in (None, "")}
             params.update(sort=col, dir=new_dir)
-            return "/?" + urlencode(params)
+            return "/players?" + urlencode(params)
 
         context = {
             "players": players, "filters": filters, "sort": sort, "desc": desc,

@@ -148,7 +148,7 @@ def player_header(
         """
         SELECT p.opta_code, p.web_name, p.first_name, p.second_name, p.birth_date,
                COALESCE(sp.position, p.position) AS position,
-               t.name AS team,
+               t.name AS team, t.short_name AS team_short,
                s.now_cost / 10.0 AS price, s.status, s.news,
                s.chance_of_playing_next_round, s.selected_by_percent, s.form,
                s.total_points, s.snapshot_ts
@@ -186,7 +186,7 @@ def player_season_context(
     """
     row = conn.execute(
         """
-        SELECT sp.position, t.name AS team
+        SELECT sp.position, t.name AS team, t.short_name AS team_short
         FROM season_players sp
         LEFT JOIN teams t ON t.season = sp.season AND t.fpl_team_id = sp.fpl_team_id
         WHERE sp.opta_code = ? AND sp.season = ?
@@ -351,5 +351,57 @@ def player_predictions(
             ORDER BY gameweek
             """,
             (season, opta_code, pred["decision_gw"], pred["model_version"]),
+        )
+    )
+
+
+# --- home page ----------------------------------------------------------------
+
+def site_stats(conn: sqlite3.Connection, season: str) -> dict[str, Any]:
+    """The headline numbers on the home page: how much data there is, how fresh."""
+    row = conn.execute(
+        """
+        SELECT
+          (SELECT COUNT(*) FROM player_snapshots
+            WHERE snapshot_ts = (SELECT MAX(snapshot_ts) FROM player_snapshots
+                                 WHERE season = :season))             AS players,
+          (SELECT COUNT(*) FROM player_gw)                           AS matches,
+          (SELECT COUNT(DISTINCT season) FROM player_gw)             AS seasons,
+          (SELECT COUNT(DISTINCT snapshot_ts) FROM player_snapshots) AS snapshots,
+          (SELECT MAX(snapshot_ts) FROM player_snapshots)            AS last_snapshot
+        """,
+        {"season": season},
+    ).fetchone()
+    return dict(row)
+
+
+def in_form(conn: sqlite3.Connection, season: str, limit: int = 5) -> list[dict[str, Any]]:
+    """Top players by FPL's `form` (average points over the last 30 days)."""
+    return latest_players(conn, season, sort="form")[:limit]
+
+
+def latest_news(conn: sqlite3.Connection, season: str, limit: int = 6) -> list[dict[str, Any]]:
+    """The most recent injury/suspension news from the latest snapshot.
+
+    news_added is when FPL posted the note, so this is "what changed lately",
+    not just "who is injured" (that list is long and mostly stale).
+    """
+    return _rows(
+        conn.execute(
+            """
+            SELECT s.opta_code, p.web_name, t.short_name AS team, s.status, s.news,
+                   s.news_added, s.chance_of_playing_next_round
+            FROM player_snapshots s
+            JOIN players p ON p.opta_code = s.opta_code
+            LEFT JOIN season_players sp ON sp.opta_code = s.opta_code AND sp.season = :season
+            LEFT JOIN teams t ON t.season = :season
+                             AND t.fpl_team_id = COALESCE(sp.fpl_team_id, p.fpl_team_id)
+            WHERE s.snapshot_ts = (SELECT MAX(snapshot_ts) FROM player_snapshots
+                                   WHERE season = :season)
+              AND s.news IS NOT NULL AND s.news != ''
+            ORDER BY s.news_added DESC
+            LIMIT :limit
+            """,
+            {"season": season, "limit": limit},
         )
     )

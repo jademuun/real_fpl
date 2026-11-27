@@ -13,8 +13,8 @@
     it sends the same GET in the background, swaps in just the table
     (hx-target), and updates the address bar (hx-push-url) so the URL stays
     shareable and the Back button works. #}
-<form class="filters" action="/" method="get"
-      hx-get="/" hx-target="#players-table" hx-swap="outerHTML" hx-push-url="true"
+<form class="filters" action="/players" method="get"
+      hx-get="/players" hx-target="#players-table" hx-swap="outerHTML" hx-push-url="true"
       hx-trigger="input changed delay:300ms from:input[type=search], change">
   <input type="search" name="q" value="{{ filters.q }}" placeholder="Search name…" aria-label="Search name">
   <select name="pos" aria-label="Position">

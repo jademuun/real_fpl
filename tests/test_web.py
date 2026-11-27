@@ -144,13 +144,13 @@ def test_fixture_grid_shows_both_sides_and_doubles(conn):
 # --- pages -----------------------------------------------------------------
 
 def test_players_page(client):
-    r = client.get("/")
+    r = client.get("/players")
     assert r.status_code == 200
     assert "<html" in r.text and "Salah" in r.text and "Doubtful 75%" in r.text
 
 
 def test_htmx_request_gets_only_the_table(client):
-    r = client.get("/?pos=GKP", headers={"HX-Request": "true"})
+    r = client.get("/players?pos=GKP", headers={"HX-Request": "true"})
     assert r.status_code == 200
     assert "<html" not in r.text
     assert "Raya" in r.text and "Salah" not in r.text
@@ -158,7 +158,7 @@ def test_htmx_request_gets_only_the_table(client):
 
 def test_empty_form_fields_are_ignored(client):
     # A submitted form sends team= and max_price= as empty strings.
-    r = client.get("/?q=&pos=&team=&max_price=&sort=bogus")
+    r = client.get("/players?q=&pos=&team=&max_price=&sort=bogus")
     assert r.status_code == 200 and "Saka" in r.text
 
 
@@ -231,7 +231,7 @@ def pred_db(db_path):
 
 def test_no_predictions_yet(conn, client):
     assert queries.live_predictions(conn, SEASON) is None
-    assert "No predictions yet" in client.get("/").text
+    assert "No predictions yet" in client.get("/players").text
     assert "No predictions yet" in client.get("/player/p1").text
 
 
@@ -249,7 +249,7 @@ def test_live_predictions_pick_newest_model_and_latest_gw(pred_db):
 
 def test_predictions_shown_to_one_decimal(pred_db):
     client = TestClient(create_app(pred_db, season=SEASON))
-    page = client.get("/").text
+    page = client.get("/players").text
     assert "Pred GW4" in page and "4.3" in page and "DGW" in page
     player = client.get("/player/p1").text
     assert "10.0" in player and "Double GW" in player and "Blank GW" in player
@@ -263,3 +263,27 @@ def test_missing_table_means_refreshing_not_crash(db_path):
     c.close()
     r = TestClient(create_app(db_path, season=SEASON)).get("/fixtures")
     assert r.status_code == 503 and "refreshing" in r.text
+
+
+
+# --- home, about, team colours ------------------------------------------------
+
+def test_home_page(client):
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "Real FPL" in r.text and "In form" in r.text
+    assert "Knock" in r.text  # Salah's news
+    assert "--team:#C8102E" in r.text  # Liverpool's chip colour
+
+
+def test_about_renders_readme(client):
+    r = client.get("/about")
+    assert r.status_code == 200
+    assert "<h1>real_fpl</h1>" in r.text
+    # The diagram is handed to mermaid.js, not shown as a code block.
+    assert '<pre class="mermaid">' in r.text
+
+
+def test_unknown_team_gets_fallback_colour():
+    from real_fpl.web.teams import FALLBACK, team_style
+    assert FALLBACK[0] in team_style("XYZ") and FALLBACK[0] in team_style(None)

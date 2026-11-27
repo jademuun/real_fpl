@@ -3,8 +3,12 @@
 {% block head %}<script src="/static/chart.umd.min.js" defer></script>{% endblock %}
 {% block content %}
 {% set label, tone = status(p.status) %}
-<p><a href="/">← Players</a></p>
-<h1>{{ p.first_name }} {{ p.second_name }}</h1>
+<p><a href="/players">← Players</a></p>
+{#- A banner in the club's colours: the same CSS variables as the small chips. #}
+<div class="player-hero" style="{{ team_style(p.team_short) }}">
+  <h1>{{ p.first_name }} {{ p.second_name }}</h1>
+  <span>{{ p.team or "" }}{% if p.position %} · {{ p.position }}{% endif %}</span>
+</div>
 <dl class="facts">
   <div><dt>Team</dt><dd>{{ p.team or "—" }}</dd></div>
   <div><dt>Position</dt><dd>{{ p.position or "—" }}</dd></div>
@@ -72,7 +76,7 @@
   {% for m in matches %}
     <tr>
       <td class="num">{{ m.gameweek }}</td>
-      <td>{{ m.opponent or "?" }} ({{ "H" if m.was_home else "A" }})</td>
+      <td><span class="team-chip" style="{{ team_style(m.opponent) }}">{{ m.opponent or "?" }}</span> {{ "H" if m.was_home else "A" }}</td>
       <td class="num">{{ m.minutes }}</td>
       <td class="num">{{ m.goals_scored }}</td>
       <td class="num">{{ m.assists }}</td>

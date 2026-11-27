@@ -130,8 +130,10 @@ data/                   database, raw archive, exports (gitignored, reproducible
 
 ## Web UI
 
-A small read-only website over the database: a filterable player table, a page per player
-(match history, points and price charts, any past season) and a fixture-difficulty grid.
+A small read-only website over the database: a home page with headline numbers, form and
+injury news; a filterable player table; a page per player
+(match history, points and price charts, any past season); a fixture-difficulty grid; and an
+About page that renders this README. Clubs are shown in their colours (`web/teams.py`).
 
 ```bash
 uv run real-fpl serve                 # http://localhost:8000
