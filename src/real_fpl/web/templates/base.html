@@ -1,0 +1,30 @@
+{#- The layout every page shares. Other templates say {% extends "base.html" %}
+    and fill in the {% block %}s; everything else (nav, CSS, scripts) is written
+    once, here. -#}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  {#- Without this, phones render the page as a zoomed-out desktop page. #}
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}real_fpl{% endblock %} · real_fpl</title>
+  <link rel="stylesheet" href="/static/style.css">
+  {#- htmx and Chart.js are vendored into static/ rather than loaded from a CDN,
+      so the site works offline and never changes underneath us. #}
+  <script src="/static/htmx.min.js" defer></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">real_fpl</a>
+    <nav>
+      <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>Players</a>
+      <a href="/fixtures" {% if request.url.path == "/fixtures" %}aria-current="page"{% endif %}>Fixtures</a>
+    </nav>
+    <span class="season">{{ season }}</span>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

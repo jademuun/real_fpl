@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Players{% endblock %}
+{% block content %}
+<h1>Players</h1>
+<p class="muted">Latest snapshot: {{ snapshot_ts or "none yet" }}</p>
+
+{#- A plain HTML form: without JavaScript, pressing Filter reloads the page with
+    the choices in the URL (?pos=MID&q=salah). htmx upgrades it: on any change
+    it sends the same GET in the background, swaps in just the table
+    (hx-target), and updates the address bar (hx-push-url) so the URL stays
+    shareable and the Back button works. #}
+<form class="filters" action="/" method="get"
+      hx-get="/" hx-target="#players-table" hx-swap="outerHTML" hx-push-url="true"
+      hx-trigger="input changed delay:300ms from:input[type=search], change">
+  <input type="search" name="q" value="{{ filters.q }}" placeholder="Search name…" aria-label="Search name">
+  <select name="pos" aria-label="Position">
+    <option value="">All positions</option>
+    {% for p in positions %}
+      <option value="{{ p }}" {% if filters.pos == p %}selected{% endif %}>{{ p }}</option>
+    {% endfor %}
+  </select>
+  <select name="team" aria-label="Team">
+    <option value="">All teams</option>
+    {% for t in teams %}
+      <option value="{{ t.fpl_team_id }}" {% if filters.team == t.fpl_team_id %}selected{% endif %}>{{ t.name }}</option>
+    {% endfor %}
+  </select>
+  <label>Max £m
+    <input type="number" name="max_price" step="0.5" min="3.5" max="16"
+           value="{{ filters.max_price if filters.max_price is not none else '' }}">
+  </label>
+  {#- Carry the current sort along when filtering. #}
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <input type="hidden" name="dir" value="{{ 'desc' if desc else 'asc' }}">
+  <noscript><button type="submit">Filter</button></noscript>
+</form>
+
+{% include "_players_table.html" %}
+{% endblock %}

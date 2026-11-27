@@ -1,0 +1,50 @@
+{#- The table on its own. players.html includes it for a full page; the route
+    returns it alone when htmx asks, so a filter change re-renders only this. #}
+{% macro th(col, label, cls="") -%}
+  <th class="{{ cls }}" {% if sort == col %}aria-sort="{{ 'descending' if desc else 'ascending' }}"{% endif %}>
+    <a href="{{ sort_url(col) }}">{{ label }}{% if sort == col %} {{ '▼' if desc else '▲' }}{% endif %}</a>
+  </th>
+{%- endmacro %}
+<div id="players-table">
+  <p class="muted">{{ players|length }} players</p>
+  <div class="table-wrap">
+  <table class="data">
+    <thead>
+      <tr>
+        {{ th("name", "Player") }}
+        {{ th("team", "Team") }}
+        {{ th("pos", "Pos") }}
+        {{ th("price", "£m", "num") }}
+        {{ th("form", "Form", "num") }}
+        {{ th("selected", "Sel %", "num") }}
+        {{ th("points", "Pts", "num") }}
+        {#- Phase 3: the model's predicted points go here as another sortable column. #}
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in players %}
+      {% set label, tone = status(p.status) %}
+      <tr>
+        <td><a href="/player/{{ p.opta_code }}">{{ p.web_name }}</a></td>
+        <td>{{ p.team or "" }}</td>
+        <td>{{ p.position or "" }}</td>
+        <td class="num">{{ "%.1f"|format(p.price) if p.price is not none else "" }}</td>
+        <td class="num">{{ p.form if p.form is not none else "" }}</td>
+        <td class="num">{{ p.selected_by_percent if p.selected_by_percent is not none else "" }}</td>
+        <td class="num">{{ p.total_points if p.total_points is not none else "" }}</td>
+        <td>
+          {% if p.status and p.status != "a" %}
+            <span class="badge {{ tone }}" title="{{ p.news or '' }}">
+              {{ label }}{% if p.chance_of_playing_next_round is not none %} {{ p.chance_of_playing_next_round }}%{% endif %}
+            </span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="muted">No players match these filters.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>

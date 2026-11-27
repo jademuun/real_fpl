@@ -1,0 +1,74 @@
+/* One small stylesheet. Colours are CSS variables so dark mode is just a second
+   set of values, chosen automatically from the operating system's setting. */
+:root {
+  --bg: #fafaf9; --fg: #1c1917; --muted: #78716c; --line: #e7e5e4;
+  --card: #ffffff; --accent: #4f46e5; --row-hover: #f5f5f4;
+  --ok: #15803d; --warn: #b45309; --bad: #b91c1c;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1917; --fg: #f5f5f4; --muted: #a8a29e; --line: #44403c;
+    --card: #292524; --accent: #818cf8; --row-hover: #312e2b;
+    --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); line-height: 1.45; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1 { margin: 0.5rem 0 0.25rem; font-size: 1.6rem; }
+.muted { color: var(--muted); }
+.small { font-size: 0.85rem; }
+
+.topbar {
+  display: flex; align-items: center; gap: 1.5rem;
+  padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--line); background: var(--card);
+  position: sticky; top: 0; z-index: 1;
+}
+.brand { font-weight: 700; color: var(--fg); }
+.topbar nav { display: flex; gap: 1rem; }
+.topbar nav a { color: var(--muted); }
+.topbar nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
+.season { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+main { max-width: 1100px; margin: 0 auto; padding: 1rem 1.5rem 3rem; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin: 1rem 0; }
+.filters input, .filters select {
+  font: inherit; padding: 0.35rem 0.5rem; border: 1px solid var(--line);
+  border-radius: 6px; background: var(--card); color: var(--fg);
+}
+.filters input[type=number] { width: 5rem; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+table.data { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+table.data th, table.data td { padding: 0.45rem 0.7rem; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+table.data thead th { position: sticky; top: 0; background: var(--card); font-weight: 600; }
+table.data thead th a { color: var(--fg); }
+table.data tbody tr:hover { background: var(--row-hover); }
+table.data .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.badge { display: inline-block; padding: 0.05rem 0.45rem; border-radius: 999px; font-size: 0.8rem; border: 1px solid currentColor; }
+.badge.ok { color: var(--ok); } .badge.warn { color: var(--warn); } .badge.bad { color: var(--bad); }
+
+.facts { display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; margin: 0.75rem 0; }
+.facts dt { color: var(--muted); font-size: 0.8rem; }
+.facts dd { margin: 0; font-size: 1.15rem; font-weight: 600; }
+
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin: 1rem 0; }
+.charts figure { margin: 0; padding: 0.75rem; height: 240px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); display: flex; flex-direction: column; }
+.charts figcaption { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.25rem; }
+.charts canvas { flex: 1; min-height: 0; }
+
+/* FPL's own difficulty colours, 1 (easy) to 5 (hard). */
+.fixtures td { vertical-align: top; }
+.fixtures td.blank { background: repeating-linear-gradient(45deg, transparent 0 6px, var(--line) 6px 7px); }
+.fdr { display: block; padding: 0.2rem 0.4rem; border-radius: 4px; text-align: center; font-size: 0.85rem; font-weight: 600; }
+.fdr + .fdr { margin-top: 0.25rem; }
+.fdr-1 { background: #375523; color: #fff; }
+.fdr-2 { background: #01fc7a; color: #000; }
+.fdr-3 { background: #e7e7e7; color: #000; }
+.fdr-4 { background: #ff1751; color: #fff; }
+.fdr-5 { background: #80072d; color: #fff; }

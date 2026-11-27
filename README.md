@@ -127,3 +127,19 @@ data/                   database, raw archive, exports (gitignored, reproducible
 - Later: rest and rotation (needs European and cup fixtures), a date dimension.
 - A model: baselines, then a GLM, then gradient-boosted trees, tested on a season-based split.
   Buy and sell suggestions come after that.
+
+## Web UI
+
+A small read-only website over the database: a filterable player table, a page per player
+(match history, points and price charts, any past season) and a fixture-difficulty grid.
+
+```bash
+uv run real-fpl serve                 # http://localhost:8000
+uv run real-fpl serve --reload        # restart on code changes while developing
+REAL_FPL_DB=/path/to/fpl.db uv run real-fpl serve   # use a database somewhere else
+```
+
+It is FastAPI rendering Jinja2 HTML templates, with htmx for in-place filtering and Chart.js for
+the charts (both vendored in `src/real_fpl/web/static/`, so no Node and no CDN). The database is
+opened with SQLite's `mode=ro`, so the site cannot write to it. It listens on 127.0.0.1 only and
+has no login.

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}{{ p.web_name }}{% endblock %}
+{% block head %}<script src="/static/chart.umd.min.js" defer></script>{% endblock %}
+{% block content %}
+{% set label, tone = status(p.status) %}
+<p><a href="/">← Players</a></p>
+<h1>{{ p.first_name }} {{ p.second_name }}</h1>
+<dl class="facts">
+  <div><dt>Team</dt><dd>{{ p.team or "—" }}</dd></div>
+  <div><dt>Position</dt><dd>{{ p.position or "—" }}</dd></div>
+  <div><dt>Price</dt><dd>{{ "£%.1fm"|format(p.price) if p.price is not none else "—" }}</dd></div>
+  <div><dt>Points</dt><dd>{{ p.total_points if p.total_points is not none else "—" }}</dd></div>
+  <div><dt>Form</dt><dd>{{ p.form if p.form is not none else "—" }}</dd></div>
+  <div><dt>Selected</dt><dd>{{ "%s%%"|format(p.selected_by_percent) if p.selected_by_percent is not none else "—" }}</dd></div>
+</dl>
+{% if p.status and p.status != "a" %}
+  <p><span class="badge {{ tone }}">{{ label }}</span> {{ p.news or "" }}</p>
+{% endif %}
+{% if not p.snapshot_ts %}
+  <p class="muted">Not in the {{ season }} squad list — shown from past seasons only.</p>
+{% endif %}
+
+{% if seasons %}
+{#- Changing the select submits the form, which reloads the page with ?season=…
+    One line of inline JavaScript is enough here; no htmx needed. #}
+<form class="filters" method="get">
+  <label>Season
+    <select name="season" onchange="this.form.submit()">
+      {% for s in seasons %}<option {% if s == shown %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+  </label>
+  <noscript><button type="submit">Show</button></noscript>
+  {% if context and shown != season %}
+    <span class="muted">In {{ shown }}: {{ context.position }}, {{ context.team }}</span>
+  {% endif %}
+</form>
+
+<div class="charts">
+  <figure><figcaption>Points per gameweek</figcaption><canvas id="points-chart"></canvas></figure>
+  <figure><figcaption>Price per gameweek (£m)</figcaption><canvas id="price-chart"></canvas></figure>
+</div>
+
+<div class="table-wrap">
+<table class="data">
+  <thead><tr>
+    <th class="num">GW</th><th>Opp</th><th class="num">Min</th><th class="num">G</th><th class="num">A</th>
+    <th class="num">xG</th><th class="num">xA</th><th class="num">Bonus</th><th class="num">Pts</th>
+    <th class="num" title="FPL's own expected points (past seasons only)">xP</th>
+  </tr></thead>
+  <tbody>
+  {% for m in matches %}
+    <tr>
+      <td class="num">{{ m.gameweek }}</td>
+      <td>{{ m.opponent or "?" }} ({{ "H" if m.was_home else "A" }})</td>
+      <td class="num">{{ m.minutes }}</td>
+      <td class="num">{{ m.goals_scored }}</td>
+      <td class="num">{{ m.assists }}</td>
+      <td class="num">{{ "%.2f"|format(m.expected_goals) if m.expected_goals is not none else "" }}</td>
+      <td class="num">{{ "%.2f"|format(m.expected_assists) if m.expected_assists is not none else "" }}</td>
+      <td class="num">{{ m.bonus }}</td>
+      <td class="num"><strong>{{ m.total_points }}</strong></td>
+      <td class="num">{{ "%.1f"|format(m.xp) if m.xp is not none else "" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{#- Data handed from Python to JavaScript: `tojson` writes the dict as JSON,
+    escaped so it can't break out of the <script> tag. The browser then draws
+    the charts itself, from numbers the server already looked up. #}
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const data = {{ chart|tojson }};
+    const css = getComputedStyle(document.documentElement);
+    const accent = css.getPropertyValue("--accent").trim();
+    const muted = css.getPropertyValue("--muted").trim();
+    Chart.defaults.color = muted;
+    const common = {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { title: { display: true, text: "Gameweek" }, grid: { display: false } } },
+    };
+    new Chart(document.getElementById("points-chart"), {
+      type: "bar",
+      data: { labels: data.gameweeks, datasets: [{ data: data.points, backgroundColor: accent }] },
+      options: common,
+    });
+    new Chart(document.getElementById("price-chart"), {
+      type: "line",
+      data: { labels: data.gameweeks, datasets: [{ data: data.price, borderColor: accent, pointRadius: 0, stepped: true }] },
+      // Prices move in £0.1m steps, so an axis starting at £0 would flatten
+      // every change into a straight line. Zoom in on the player's own range.
+      options: { ...common, scales: { ...common.scales, y: { grace: 0.3, ticks: { stepSize: 0.1 } } } },
+    });
+  });
+</script>
+{% else %}
+  <p class="muted">No match history yet.</p>
+{% endif %}
+{% endblock %}
