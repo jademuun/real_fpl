@@ -12,7 +12,6 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ipynb_checkpoints/
-CLAUDE.md
 docs/LEARNING.md
 # uv.lock IS committed on purpose - it pins exact versions so the project
 # rebuilds identically later. Only applications commit lockfiles; libraries
