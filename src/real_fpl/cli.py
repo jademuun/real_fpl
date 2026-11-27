@@ -115,6 +115,27 @@ def export_cmd(
     console.print(f"[green]wrote[/green] {path}")
 
 
+@app.command("serve")
+def serve(
+    port: int = typer.Option(8000, "--port"),
+    reload: bool = typer.Option(False, "--reload", help="Restart on code changes (development)."),
+) -> None:
+    """Run the web UI at http://localhost:PORT (read-only view of the database)."""
+    import uvicorn
+
+    if not DB_PATH.exists():
+        # Fail loudly: in a second checkout (the `ui` worktree) data/ doesn't
+        # exist, and pointing at nothing would just show empty pages.
+        console.print(
+            f"[red]no database at {DB_PATH}[/red] -- set REAL_FPL_DB to the real one"
+        )
+        raise typer.Exit(1)
+    console.print(f"serving {DB_PATH} at [bold]http://localhost:{port}[/bold]")
+    # 127.0.0.1, not 0.0.0.0: reachable from this machine only. The site has no
+    # login, so it shouldn't be on the network until that's a deliberate choice.
+    uvicorn.run("real_fpl.web.app:app", host="127.0.0.1", port=port, reload=reload)
+
+
 @app.command("status")
 def status() -> None:
     """Row counts and last fetch per source."""

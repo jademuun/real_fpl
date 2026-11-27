@@ -14,7 +14,10 @@ CONFIG_PATH = PROJECT_ROOT / "config" / "sources.yaml"
 DATA_DIR = PROJECT_ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
 EXPORT_DIR = DATA_DIR / "exports"
-DB_PATH = DATA_DIR / "fpl.db"
+# REAL_FPL_DB lets a second checkout (e.g. the `ui` git worktree, which has no
+# data/ folder because data/ is never committed) point at the one real database
+# instead of silently creating an empty new one.
+DB_PATH = Path(os.environ["REAL_FPL_DB"]).expanduser() if os.environ.get("REAL_FPL_DB") else DATA_DIR / "fpl.db"
 
 
 def entry_id() -> int | None:
