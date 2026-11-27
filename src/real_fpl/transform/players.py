@@ -72,6 +72,22 @@ def players_rows(bootstrap: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def season_players_rows(bootstrap: dict[str, Any], season: str) -> list[dict[str, Any]]:
+    """Position and club this season, for the per-season roster table."""
+    positions = position_map(bootstrap)
+    return [
+        {
+            "season": season,
+            "opta_code": to_str(e.get("opta_code")),
+            "fpl_element_id": e["id"],
+            "position": positions.get(e.get("element_type")),
+            "fpl_team_id": to_int(e.get("team")),
+        }
+        for e in bootstrap["elements"]
+        if to_str(e.get("opta_code"))
+    ]
+
+
 def snapshot_rows(
     bootstrap: dict[str, Any], season: str, snapshot_ts: str
 ) -> list[dict[str, Any]]:

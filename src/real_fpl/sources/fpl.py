@@ -53,6 +53,8 @@ def ingest_snapshot(conn: sqlite3.Connection, bootstrap: dict[str, Any] | None =
                      key=("season", "fpl_team_id"))
     n_players = upsert(conn, "players", players.players_rows(bootstrap),
                        key=("opta_code",))
+    upsert(conn, "season_players", players.season_players_rows(bootstrap, season),
+           key=("season", "opta_code"))
     n_snaps = append(conn, "player_snapshots",
                      players.snapshot_rows(bootstrap, season, snapshot_ts))
 
